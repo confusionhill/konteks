@@ -1,0 +1,147 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/dika/contextkit/backend/internal/domain"
+	"github.com/jmoiron/sqlx"
+)
+
+type memoryRepository struct {
+	db *sqlx.DB
+}
+
+func NewMemoryRepository(db *sqlx.DB) domain.MemoryRepository {
+	return &memoryRepository{db: db}
+}
+
+// Helper to convert float32 array to PostgreSQL pgvector string format: [0.1,0.2,...]
+func float32ArrayToString(arr []float32) string {
+	var builder strings.Builder
+	builder.WriteByte('[')
+	for i, f := range arr {
+		if i > 0 {
+			builder.WriteByte(',')
+		}
+		builder.WriteString(strconv.FormatFloat(float64(f), 'f', -1, 32))
+	}
+	builder.WriteByte(']')
+	return builder.String()
+}
+
+// Helper to parse PostgreSQL pgvector string back to float32 array
+func stringToFloat32Array(s string) ([]float32, error) {
+	if len(s) < 2 || s[0] != '[' || s[len(s)-1] != ']' {
+		return nil, fmt.Errorf("invalid vector format: %s", s)
+	}
+	s = s[1 : len(s)-1]
+	if s == "" {
+		return []float32{}, nil
+	}
+	parts := strings.Split(s, ",")
+	res := make([]float32, len(parts))
+	for i, p := range parts {
+		f, err := strconv.ParseFloat(strings.TrimSpace(p), 32)
+		if err != nil {
+			return nil, err
+		}
+		res[i] = float32(f)
+	}
+	return res, nil
+}
+
+func (r *memoryRepository) Create(ctx context.Context, memory *domain.Memory) error {
+	query := `
+		INSERT INTO memories (tenant_id, room_id, external_user_id, content, embedding, metadata)
+		VALUES ($1, $2, $3, $4, $5::vector, $6)
+		RETURNING id, created_at
+	`
+	embeddingStr := float32ArrayToString(memory.Embedding)
+	
+	type Inserted struct {
+		ID        string `db:"id"`
+		CreatedAt string `db:"created_at"`
+	}
+	var ins Inserted
+	err := r.db.GetContext(ctx, &ins, query, 
+		memory.TenantID, 
+		memory.RoomID, 
+		memory.ExternalUserID, 
+		memory.Content, 
+		embeddingStr, 
+		memory.Metadata,
+	)
+	if err != nil {
+		return err
+	}
+
+	memory.ID = ins.ID
+	return nil
+}
+
+func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, externalUserID *string, queryEmbedding []float32, limit int) ([]domain.Memory, error) {
+	embeddingStr := float32ArrayToString(queryEmbedding)
+
+	var query string
+	var args []any
+
+	if externalUserID != nil && *externalUserID != "" {
+		query = `
+			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+			FROM memories
+			WHERE room_id = $1 OR (room_id IS NULL AND external_user_id = $2)
+			ORDER BY embedding <=> $3::vector
+			LIMIT $4
+		`
+		args = []any{roomID, *externalUserID, embeddingStr, limit}
+	} else {
+		query = `
+			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+			FROM memories
+			WHERE room_id = $1
+			ORDER BY embedding <=> $2::vector
+			LIMIT $3
+		`
+		args = []any{roomID, embeddingStr, limit}
+	}
+
+	// Dynamic scanning struct to capture vector as a text string first
+	type dbMemory struct {
+		ID             string  `db:"id"`
+		TenantID       string  `db:"tenant_id"`
+		RoomID         *string `db:"room_id"`
+		ExternalUserID *string `db:"external_user_id"`
+		Content        string  `db:"content"`
+		EmbeddingText  string  `db:"embedding"`
+		Metadata       string  `db:"metadata"`
+		CreatedAt      string  `db:"created_at"`
+	}
+
+	var rows []dbMemory
+	err := r.db.SelectContext(ctx, &rows, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	memories := make([]domain.Memory, len(rows))
+	for i, row := range rows {
+		emb, err := stringToFloat32Array(row.EmbeddingText)
+		if err != nil {
+			return nil, err
+		}
+		memories[i] = domain.Memory{
+			ID:             row.ID,
+			TenantID:       row.TenantID,
+			RoomID:         row.RoomID,
+			ExternalUserID: row.ExternalUserID,
+			Content:        row.Content,
+			Embedding:      emb,
+			Metadata:       row.Metadata,
+		}
+	}
+
+	return memories, nil
+}

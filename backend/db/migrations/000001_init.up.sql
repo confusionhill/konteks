@@ -61,7 +61,6 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 CREATE INDEX IF NOT EXISTS idx_memories_room_id ON memories(room_id);
 CREATE INDEX IF NOT EXISTS idx_memories_tenant_user ON memories(tenant_id, external_user_id);
-CREATE INDEX IF NOT EXISTS idx_memories_hnsw ON memories USING hnsw (embedding vector_cosine_ops);
 
 -- Room Events
 CREATE TABLE IF NOT EXISTS room_events (

@@ -19,3 +19,6 @@ backend/seed
 backend/tmp/
 
 ai_agent_context_infrastructure_product(2).md
+
+seed
+server

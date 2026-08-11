@@ -4,6 +4,8 @@ backend/secrets/config.json
 # Local Binaries
 backend/bin/
 backend/dist/
+backend/server
+backend/seed
 
 # IDE / OS files
 .DS_Store

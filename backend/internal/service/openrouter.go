@@ -62,7 +62,7 @@ func (s *openRouterServiceClient) GenerateEmbedding(ctx context.Context, text st
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.OK {
+	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("openrouter embedding api returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
@@ -159,7 +159,7 @@ Guidelines:
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.OK {
+	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return "", "", "", fmt.Errorf("openrouter chat completion api returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}

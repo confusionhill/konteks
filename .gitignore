@@ -21,4 +21,10 @@ backend/tmp/
 ai_agent_context_infrastructure_product(2).md
 
 seed
+
+# Python Agent
+example/
+.venv/
+venv/
+__pycache__/
 server

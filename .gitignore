@@ -1,0 +1,19 @@
+# Secrets
+backend/secrets/config.json
+
+# Local Binaries
+backend/bin/
+backend/dist/
+
+# IDE / OS files
+.DS_Store
+.vscode/
+.idea/
+
+# Go files
+*.exe
+*.test
+*.out
+backend/tmp/
+
+ai_agent_context_infrastructure_product(2).md

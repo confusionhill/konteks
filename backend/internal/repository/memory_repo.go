@@ -92,7 +92,7 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 		query = `
 			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
 			FROM memories
-			WHERE room_id = $1 OR (room_id IS NULL AND external_user_id = $2)
+			WHERE room_id = $1 OR external_user_id = $2
 			ORDER BY embedding <=> $3::vector
 			LIMIT $4
 		`

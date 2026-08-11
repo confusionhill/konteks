@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 )
@@ -63,12 +64,18 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 	var matchedMemories []domain.Memory
 	if query != "" {
 		embedding, err := u.openRouterClient.GenerateEmbedding(ctx, query)
-		if err == nil {
+		if err != nil {
+			log.Printf("[Context Query Embedding Error]: failed to generate embedding: %v", err)
+		} else {
 			var extUserID *string
 			if room.ExternalUserID != "" {
 				extUserID = &room.ExternalUserID
 			}
-			matchedMemories, _ = u.memoryRepo.SearchSemantic(ctx, roomID, extUserID, embedding, 5)
+			var errSearch error
+			matchedMemories, errSearch = u.memoryRepo.SearchSemantic(ctx, roomID, extUserID, embedding, 5)
+			if errSearch != nil {
+				log.Printf("[Context Memory Search Error]: %v", errSearch)
+			}
 		}
 	}
 

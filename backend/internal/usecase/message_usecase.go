@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 )
@@ -51,7 +52,9 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 
 	// 3. Generate embedding vector for the message content
 	embedding, err := u.openRouterClient.GenerateEmbedding(ctx, content)
-	if err == nil {
+	if err != nil {
+		log.Printf("[Embedding Error]: failed to generate embedding: %v", err)
+	} else {
 		// 4. Save embedding as a semantic Memory chunk
 		memory := &domain.Memory{
 			TenantID:       tenantID,
@@ -63,8 +66,9 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 		if room.ExternalUserID != "" {
 			memory.ExternalUserID = &room.ExternalUserID
 		}
-		// Save memory (ignore non-critical vector store failures for MVP, but log/bubble if critical)
-		_ = u.memoryRepo.Create(ctx, memory)
+		if err := u.memoryRepo.Create(ctx, memory); err != nil {
+			log.Printf("[Memory Save Error]: failed to save memory: %v", err)
+		}
 	}
 
 	// 5. Retrieve current room state and last 15 messages for LLM extraction
@@ -80,13 +84,17 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 	if err == nil && len(history) > 0 {
 		// 6. Synchronously extract summary, active topic, and state payload
 		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary)
-		if err == nil {
+		if err != nil {
+			log.Printf("[State Extraction Error]: failed to extract state: %v", err)
+		} else {
 			state.Summary = newSummary
 			state.ActiveTopic = activeTopic
 			state.State = json.RawMessage(stateJSON)
 
 			// 7. Upsert state
-			_ = u.roomRepo.UpsertState(ctx, state)
+			if err := u.roomRepo.UpsertState(ctx, state); err != nil {
+				log.Printf("[State Save Error]: failed to save state: %v", err)
+			}
 		}
 	}
 

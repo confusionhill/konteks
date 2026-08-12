@@ -147,6 +147,7 @@ func main() {
 	// Rooms API
 	v1.POST("/rooms", roomHandler.CreateRoom)
 	v1.GET("/rooms/:room_id", roomHandler.GetRoomState)
+	v1.PATCH("/rooms/:room_id", roomHandler.UpdateRoom)
 	v1.DELETE("/rooms/:room_id", roomHandler.DeleteRoom)
 
 	// Messages API

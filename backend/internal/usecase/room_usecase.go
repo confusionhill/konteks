@@ -40,3 +40,7 @@ func (u *roomUsecase) DeleteRoom(ctx context.Context, tenantID string, roomID st
 func (u *roomUsecase) ListRoomsOverview(ctx context.Context, tenantID string, search string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
 	return u.roomRepo.ListWithOverview(ctx, tenantID, search, sortBy, sortOrder, minMessages, limit, offset)
 }
+
+func (u *roomUsecase) UpdateRoom(ctx context.Context, tenantID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+	return u.roomRepo.Update(ctx, tenantID, roomID, stateSchema, defaultPolicy)
+}

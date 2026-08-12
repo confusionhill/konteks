@@ -342,3 +342,87 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 	return overviews, total, nil
 }
 
+func (r *roomRepository) Update(ctx context.Context, tenantID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	type rawRoom struct {
+		ID             string         `db:"id"`
+		TenantID       string         `db:"tenant_id"`
+		ExternalUserID string         `db:"external_user_id"`
+		CreatedAt      string         `db:"created_at"`
+		UpdatedAt      string         `db:"updated_at"`
+		StateSchema    sql.NullString `db:"state_schema"`
+		DefaultPolicy  sql.NullString `db:"default_policy"`
+	}
+
+	// 1. Fetch current room values to build fallback values
+	var currentRaw rawRoom
+	queryFetch := `
+		SELECT id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy
+		FROM rooms
+		WHERE id = $1 AND tenant_id = $2
+	`
+	err = tx.GetContext(ctx, &currentRaw, queryFetch, roomID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Map update parameters (use fallback if empty/nil)
+	schemaParam := currentRaw.StateSchema.String
+	if len(stateSchema) > 0 && string(stateSchema) != "null" {
+		schemaParam = string(stateSchema)
+	}
+
+	var policyParam any = nil
+	if currentRaw.DefaultPolicy.Valid {
+		policyParam = currentRaw.DefaultPolicy.String
+	}
+	if defaultPolicy != nil {
+		pBytes, _ := json.Marshal(defaultPolicy)
+		policyParam = string(pBytes)
+	}
+
+	// 3. Perform update query
+	queryUpdate := `
+		UPDATE rooms
+		SET state_schema = $3, default_policy = $4, updated_at = NOW()
+		WHERE id = $1 AND tenant_id = $2
+		RETURNING id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy
+	`
+
+	var rr rawRoom
+	err = tx.GetContext(ctx, &rr, queryUpdate, roomID, tenantID, schemaParam, policyParam)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	// Map back to domain.Room struct
+	room := &domain.Room{
+		ID:             rr.ID,
+		TenantID:       rr.TenantID,
+		ExternalUserID: rr.ExternalUserID,
+		CreatedAt:      rr.CreatedAt,
+		UpdatedAt:      rr.UpdatedAt,
+	}
+
+	if rr.StateSchema.Valid && rr.StateSchema.String != "" {
+		room.StateSchema = json.RawMessage(rr.StateSchema.String)
+	}
+	if rr.DefaultPolicy.Valid && rr.DefaultPolicy.String != "" {
+		var policy domain.ContextPolicy
+		if err := json.Unmarshal([]byte(rr.DefaultPolicy.String), &policy); err == nil {
+			room.DefaultPolicy = &policy
+		}
+	}
+
+	return room, nil
+}
+

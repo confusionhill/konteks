@@ -78,3 +78,32 @@ func (h *RoomHandler) DeleteRoom(c echo.Context) error {
 
 	return c.NoContent(http.StatusNoContent)
 }
+
+type updateRoomRequest struct {
+	StateSchema   json.RawMessage       `json:"state_schema,omitempty"`
+	DefaultPolicy *domain.ContextPolicy `json:"default_policy,omitempty"`
+}
+
+func (h *RoomHandler) UpdateRoom(c echo.Context) error {
+	tenantID, ok := c.Get("tenant_id").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	}
+
+	roomID := c.Param("room_id")
+	if roomID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id parameter"})
+	}
+
+	var req updateRoomRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	room, err := h.roomUsecase.UpdateRoom(c.Request().Context(), tenantID, roomID, req.StateSchema, req.DefaultPolicy)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, room)
+}

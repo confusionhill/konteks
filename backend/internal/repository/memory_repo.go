@@ -82,8 +82,9 @@ func (r *memoryRepository) Create(ctx context.Context, memory *domain.Memory) er
 	return nil
 }
 
-func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, externalUserID *string, queryEmbedding []float32, limit int) ([]domain.Memory, error) {
+func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error) {
 	embeddingStr := float32ArrayToString(queryEmbedding)
+	semanticWeight := 1.0 - freshnessWeight
 
 	var query string
 	var args []any
@@ -93,19 +94,19 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
 			FROM memories
 			WHERE room_id = $1 OR external_user_id = $2
-			ORDER BY (0.7 * (1 - (embedding <=> $3::vector)) + 0.3 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
-			LIMIT $4
+			ORDER BY ($4 * (1 - (embedding <=> $3::vector)) + $5 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
+			LIMIT $6
 		`
-		args = []any{roomID, *externalUserID, embeddingStr, limit}
+		args = []any{roomID, *externalUserID, embeddingStr, semanticWeight, freshnessWeight, limit}
 	} else {
 		query = `
 			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
 			FROM memories
 			WHERE room_id = $1
-			ORDER BY (0.7 * (1 - (embedding <=> $2::vector)) + 0.3 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
-			LIMIT $3
+			ORDER BY ($3 * (1 - (embedding <=> $2::vector)) + $4 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
+			LIMIT $5
 		`
-		args = []any{roomID, embeddingStr, limit}
+		args = []any{roomID, embeddingStr, semanticWeight, freshnessWeight, limit}
 	}
 
 	// Dynamic scanning struct to capture vector as a text string first

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { RoomOverview } from '../api/dashboard';
-import { CaretRight, ChatCircleText, Clock, User, Coins, CurrencyDollar } from '@phosphor-icons/react';
+import { CaretRight, ChatCircleText, Clock, User } from '@phosphor-icons/react';
 
 interface RoomTableProps {
   rooms: RoomOverview[];
@@ -29,9 +29,7 @@ export const RoomTable: React.FC<RoomTableProps> = ({ rooms }) => {
               <th className="py-4 px-6">Room ID</th>
               <th className="py-4 px-6">Active Topic</th>
               <th className="py-4 px-6">User ID</th>
-              <th className="py-4 px-4">Msgs</th>
-              <th className="py-4 px-4">Est. Cost ($)</th>
-              <th className="py-4 px-4">Avg Tks/Turn</th>
+              <th className="py-4 px-6">Messages</th>
               <th className="py-4 px-6">Last Active</th>
               <th className="py-4 px-4 text-right">Inspect</th>
             </tr>
@@ -45,7 +43,7 @@ export const RoomTable: React.FC<RoomTableProps> = ({ rooms }) => {
               >
                 <td className="py-4 px-6 font-mono text-xs font-medium text-slate-900">
                   <span className="bg-slate-100 group-hover:bg-indigo-100 text-slate-800 group-hover:text-primary-700 px-2 py-1 rounded transition-colors">
-                    {room.id.substring(0, 16)}...
+                    {room.id.substring(0, 18)}...
                   </span>
                 </td>
                 <td className="py-4 px-6 font-medium text-slate-800">
@@ -63,22 +61,10 @@ export const RoomTable: React.FC<RoomTableProps> = ({ rooms }) => {
                     {room.external_user_id || 'anonymous'}
                   </span>
                 </td>
-                <td className="py-4 px-4 text-slate-700 font-medium">
+                <td className="py-4 px-6 text-slate-700 font-medium">
                   <span className="inline-flex items-center gap-1">
                     <ChatCircleText size={16} className="text-primary-600" />
                     {room.message_count}
-                  </span>
-                </td>
-                <td className="py-4 px-4 text-slate-700 font-mono text-xs font-medium">
-                  <span className="inline-flex items-center gap-1 text-slate-900">
-                    <CurrencyDollar size={14} className="text-emerald-600" />
-                    {(room.total_cost || 0).toFixed(6)}
-                  </span>
-                </td>
-                <td className="py-4 px-4 text-slate-700 font-mono text-xs">
-                  <span className="inline-flex items-center gap-1 text-slate-600">
-                    <Coins size={14} className="text-amber-500" />
-                    {Math.round(room.avg_tokens_per_turn || 0)}
                   </span>
                 </td>
                 <td className="py-4 px-6 text-slate-500 text-xs">

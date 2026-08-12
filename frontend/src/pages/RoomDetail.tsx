@@ -5,7 +5,7 @@ import type { RoomDetail } from '../api/dashboard';
 import { StatePanel } from '../components/StatePanel';
 import { MessageList } from '../components/MessageList';
 import { DetailSkeleton } from '../components/Skeleton';
-import { ArrowLeft, User, Calendar, Warning } from '@phosphor-icons/react';
+import { ArrowLeft, User, Calendar, Warning, CurrencyDollar, Coins, Lightning } from '@phosphor-icons/react';
 
 export const RoomDetailPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -55,7 +55,7 @@ export const RoomDetailPage: React.FC = () => {
 
       {/* Header Info */}
       {detail?.room && (
-        <div className="bg-surface rounded-xl p-6 border border-slate-100 shadow-soft">
+        <div className="bg-surface rounded-xl p-6 border border-slate-100 shadow-soft space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-primary-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
@@ -78,6 +78,41 @@ export const RoomDetailPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Per-Room Token & Cost Analytics Cards */}
+          {detail.metrics && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+              <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Est. Room Cost</div>
+                  <div className="text-base font-bold font-mono text-emerald-700 mt-0.5">
+                    ${(detail.metrics.total_cost || 0).toFixed(6)}
+                  </div>
+                </div>
+                <CurrencyDollar size={22} className="text-emerald-600" />
+              </div>
+
+              <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Avg Tokens / Turn</div>
+                  <div className="text-base font-bold font-mono text-slate-900 mt-0.5">
+                    {Math.round(detail.metrics.avg_tokens_per_turn || 0)}
+                  </div>
+                </div>
+                <Coins size={22} className="text-amber-500" />
+              </div>
+
+              <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Room Tokens</div>
+                  <div className="text-base font-bold font-mono text-primary-700 mt-0.5">
+                    {detail.metrics.total_tokens || 0}
+                  </div>
+                </div>
+                <Lightning size={22} className="text-primary-600" />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

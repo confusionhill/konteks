@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/dika/contextkit/backend/internal/domain"
@@ -58,9 +57,10 @@ func (h *DashboardHandler) ListRooms(c echo.Context) error {
 }
 
 type roomDetailResponse struct {
-	Room     *domain.Room      `json:"room"`
-	State    *domain.RoomState `json:"state"`
-	Messages []domain.Message  `json:"messages"`
+	Room     *domain.Room        `json:"room"`
+	Metrics  *domain.RoomMetrics `json:"metrics"`
+	State    *domain.RoomState   `json:"state"`
+	Messages []domain.Message    `json:"messages"`
 }
 
 func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
@@ -87,22 +87,19 @@ func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	// Parse state JSON for clean output
-	if state != nil && state.State != nil {
-		var stateMap map[string]interface{}
-		if json.Unmarshal(state.State, &stateMap) != nil {
-			stateMap = map[string]interface{}{}
-		}
-		_ = stateMap // state.State is already json.RawMessage, will serialize fine
-	}
-
 	messages, err := h.messageUsecase.ListMessages(c.Request().Context(), tenantID, roomID, 50, 0)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
+	metrics, err := h.usageUsecase.GetRoomMetrics(c.Request().Context(), roomID)
+	if err != nil {
+		metrics = &domain.RoomMetrics{}
+	}
+
 	return c.JSON(http.StatusOK, roomDetailResponse{
 		Room:     room,
+		Metrics:  metrics,
 		State:    state,
 		Messages: messages,
 	})

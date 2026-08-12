@@ -55,6 +55,11 @@ export interface RoomDetail {
     created_at: string;
     updated_at: string;
   };
+  metrics?: {
+    total_tokens: number;
+    total_cost: number;
+    avg_tokens_per_turn: number;
+  };
   state: RoomState | null;
   messages: Message[];
 }

@@ -236,15 +236,15 @@ func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomStat
 func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, search string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
 	// 1. Build ORDER BY safely to prevent SQL injection
 	allowedSortFields := map[string]string{
-		"id":               "r.id",
-		"external_user_id": "r.external_user_id",
-		"active_topic":     "rs.active_topic",
-		"message_count":    "COALESCE(mc.msg_count, 0)",
-		"total_cost":       "COALESCE(uc.total_cost, 0)",
-		"last_active_at":   "r.updated_at",
+		"id":               "id",
+		"external_user_id": "external_user_id",
+		"active_topic":     "active_topic",
+		"message_count":    "message_count",
+		"total_cost":       "total_cost",
+		"last_active_at":   "last_active_at",
 	}
 
-	orderBy := "r.updated_at"
+	orderBy := "last_active_at"
 	if field, ok := allowedSortFields[sortBy]; ok {
 		orderBy = field
 	}

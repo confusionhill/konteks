@@ -34,3 +34,7 @@ func (u *usageUsecase) RecordUsage(ctx context.Context, tenantID, endpoint strin
 func (u *usageUsecase) GetUsageSummary(ctx context.Context, tenantID string) (*domain.UsageSummary, error) {
 	return u.usageRepo.GetSummary(ctx, tenantID)
 }
+
+func (u *usageUsecase) GetRoomMetrics(ctx context.Context, roomID string) (*domain.RoomMetrics, error) {
+	return u.usageRepo.GetRoomMetrics(ctx, roomID)
+}

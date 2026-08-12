@@ -82,3 +82,21 @@ func (r *usageRepository) GetSummary(ctx context.Context, tenantID string) (*dom
 
 	return summary, nil
 }
+
+func (r *usageRepository) GetRoomMetrics(ctx context.Context, roomID string) (*domain.RoomMetrics, error) {
+	metrics := &domain.RoomMetrics{}
+	query := `
+		SELECT 
+			COALESCE(SUM(tokens_used), 0),
+			COALESCE(SUM(cost_total), 0),
+			COALESCE(AVG(tokens_used), 0)
+		FROM usage_records
+		WHERE room_id = $1
+	`
+	row := r.db.QueryRowContext(ctx, query, roomID)
+	err := row.Scan(&metrics.TotalTokens, &metrics.TotalCost, &metrics.AvgTokensPerTurn)
+	if err != nil {
+		return nil, err
+	}
+	return metrics, nil
+}

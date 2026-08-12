@@ -16,6 +16,12 @@ type UsageRecord struct {
 	CreatedAt    string  `db:"created_at" json:"created_at"`
 }
 
+type RoomMetrics struct {
+	TotalTokens      int     `json:"total_tokens"`
+	TotalCost        float64 `json:"total_cost"`
+	AvgTokensPerTurn float64 `json:"avg_tokens_per_turn"`
+}
+
 type UsageSummary struct {
 	TenantID         string  `json:"tenant_id"`
 	TotalRooms       int     `json:"total_rooms"`
@@ -33,9 +39,11 @@ type UsageSummary struct {
 type UsageRepository interface {
 	Record(ctx context.Context, rec *UsageRecord) error
 	GetSummary(ctx context.Context, tenantID string) (*UsageSummary, error)
+	GetRoomMetrics(ctx context.Context, roomID string) (*RoomMetrics, error)
 }
 
 type UsageUsecase interface {
 	RecordUsage(ctx context.Context, tenantID, endpoint string, roomID *string, tokensIn, tokensOut int) error
 	GetUsageSummary(ctx context.Context, tenantID string) (*UsageSummary, error)
+	GetRoomMetrics(ctx context.Context, roomID string) (*RoomMetrics, error)
 }

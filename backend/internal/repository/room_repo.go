@@ -31,11 +31,38 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 	queryRoom := `
 		INSERT INTO rooms (tenant_id, external_user_id)
 		VALUES ($1, $2)
-		RETURNING id, tenant_id, external_user_id, created_at, updated_at
+		RETURNING id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy
 	`
-	err = tx.GetContext(ctx, &room, queryRoom, tenantID, externalUserID)
+	var schema sql.NullString
+	var policy sql.NullString
+	type rawRoom struct {
+		ID             string         `db:"id"`
+		TenantID       string         `db:"tenant_id"`
+		ExternalUserID string         `db:"external_user_id"`
+		CreatedAt      string         `db:"created_at"`
+		UpdatedAt      string         `db:"updated_at"`
+		StateSchema    sql.NullString `db:"state_schema"`
+		DefaultPolicy  sql.NullString `db:"default_policy"`
+	}
+	var r rawRoom
+	err = tx.GetContext(ctx, &r, queryRoom, tenantID, externalUserID)
 	if err != nil {
 		return nil, err
+	}
+	room = domain.Room{
+		ID:             r.ID,
+		TenantID:       r.TenantID,
+		ExternalUserID: r.ExternalUserID,
+		CreatedAt:      r.CreatedAt,
+		UpdatedAt:      r.UpdatedAt,
+	}
+	if r.StateSchema.Valid {
+		room.StateSchema = []byte(r.StateSchema.String)
+	}
+	if r.DefaultPolicy.Valid {
+		var p domain.ContextPolicy
+		_ = json.Unmarshal([]byte(r.DefaultPolicy.String), &p)
+		room.DefaultPolicy = &p
 	}
 
 	// Insert initial empty state
@@ -57,17 +84,41 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 
 func (r *roomRepository) GetByID(ctx context.Context, tenantID string, roomID string) (*domain.Room, error) {
 	query := `
-		SELECT id, tenant_id, external_user_id, created_at, updated_at
+		SELECT id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy
 		FROM rooms
 		WHERE tenant_id = $1 AND id = $2
 	`
-	var room domain.Room
-	err := r.db.GetContext(ctx, &room, query, tenantID, roomID)
+	type rawRoom struct {
+		ID             string         `db:"id"`
+		TenantID       string         `db:"tenant_id"`
+		ExternalUserID string         `db:"external_user_id"`
+		CreatedAt      string         `db:"created_at"`
+		UpdatedAt      string         `db:"updated_at"`
+		StateSchema    sql.NullString `db:"state_schema"`
+		DefaultPolicy  sql.NullString `db:"default_policy"`
+	}
+	var r rawRoom
+	err := r.db.GetContext(ctx, &r, query, tenantID, roomID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found
 		}
 		return nil, err
+	}
+	room := domain.Room{
+		ID:             r.ID,
+		TenantID:       r.TenantID,
+		ExternalUserID: r.ExternalUserID,
+		CreatedAt:      r.CreatedAt,
+		UpdatedAt:      r.UpdatedAt,
+	}
+	if r.StateSchema.Valid && r.StateSchema.String != "" {
+		room.StateSchema = []byte(r.StateSchema.String)
+	}
+	if r.DefaultPolicy.Valid && r.DefaultPolicy.String != "" {
+		var p domain.ContextPolicy
+		_ = json.Unmarshal([]byte(r.DefaultPolicy.String), &p)
+		room.DefaultPolicy = &p
 	}
 	return &room, nil
 }

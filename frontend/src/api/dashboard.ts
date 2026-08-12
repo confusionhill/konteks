@@ -1,0 +1,77 @@
+export interface UsageSummary {
+  tenant_id: string;
+  total_rooms: number;
+  total_messages: number;
+  total_memories: number;
+  total_api_calls: number;
+  total_tokens_used: number;
+}
+
+export interface RoomOverview {
+  id: string;
+  external_user_id: string;
+  active_topic: string;
+  message_count: number;
+  last_active_at: string;
+}
+
+export interface Message {
+  id: string;
+  room_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  sequence: number;
+  created_at: string;
+}
+
+export interface RoomState {
+  room_id: string;
+  summary: string;
+  active_topic: string;
+  state: Record<string, unknown>;
+  updated_at: string;
+}
+
+export interface RoomDetail {
+  room: {
+    id: string;
+    tenant_id: string;
+    external_user_id: string;
+    created_at: string;
+    updated_at: string;
+  };
+  state: RoomState | null;
+  messages: Message[];
+}
+
+const getAuthHeaders = (): HeadersInit => {
+  const apiKey = localStorage.getItem('konteks_api_key') || 'dev_secret_key_123';
+  return {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+};
+
+export async function fetchSummary(): Promise<UsageSummary> {
+  const res = await fetch('/v1/dashboard/summary', { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch summary: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchRooms(): Promise<RoomOverview[]> {
+  const res = await fetch('/v1/dashboard/rooms', { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch rooms: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchRoomDetail(roomId: string): Promise<RoomDetail> {
+  const res = await fetch(`/v1/dashboard/rooms/${roomId}`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch room details: ${res.statusText}`);
+  }
+  return res.json();
+}

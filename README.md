@@ -164,10 +164,10 @@ response = openai.chat.completions.create(
 - [x] Managed background summarization & compaction (bounded worker pool)
 - [x] Usage metering & developer dashboard (Vite + React + TS + Tailwind v3)
 
-### Phase 2 — Context Engine Refinement
-- [ ] Automatic reference resolution (*"it"*, *"which one"*)
-- [ ] Context policies (token budget constraints, freshness)
-- [ ] Structured state tracking and JSON extraction
+### Phase 2 — Context Engine Refinement (Completed)
+- [x] Automatic reference resolution (*"it"*, *"which one"*)
+- [x] Context policies (token budget constraints, freshness)
+- [x] Structured state tracking and JSON extraction
 
 ### Phase 3 — Platform Scale
 - [ ] Multi-provider memory router (Honcho, Redis AMS, Zep)

@@ -77,7 +77,9 @@ func UsageTrackingMiddleware(usageUsecase domain.UsageUsecase) echo.MiddlewareFu
 						roomIDPtr = &roomID
 					}
 					go func() {
-						if recErr := usageUsecase.RecordUsage(context.Background(), tenantID, endpointName, roomIDPtr, 0); recErr != nil {
+						tokensIn, _ := c.Get("tokens_input").(int)
+						tokensOut, _ := c.Get("tokens_output").(int)
+						if recErr := usageUsecase.RecordUsage(context.Background(), tenantID, endpointName, roomIDPtr, tokensIn, tokensOut); recErr != nil {
 							log.Printf("[Usage Tracking Error]: %v", recErr)
 						}
 					}()

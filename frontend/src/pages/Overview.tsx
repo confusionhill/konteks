@@ -5,7 +5,7 @@ import { StatCard } from '../components/StatCard';
 import { RoomTable } from '../components/RoomTable';
 import { StatCardSkeleton, TableSkeleton } from '../components/Skeleton';
 import { EmptyState } from '../components/EmptyState';
-import { Door, ChatCircleText, HardDrive, Lightning, Warning } from '@phosphor-icons/react';
+import { Door, ChatCircleText, HardDrive, Lightning, Warning, CurrencyDollar, ArrowDownLeft, ArrowUpRight } from '@phosphor-icons/react';
 
 export const OverviewPage: React.FC = () => {
   const [summary, setSummary] = useState<UsageSummary | null>(null);
@@ -62,32 +62,56 @@ export const OverviewPage: React.FC = () => {
         </div>
       ) : (
         summary && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              label="Active Rooms"
-              value={summary.total_rooms}
-              icon={<Door size={22} weight="duotone" />}
-              highlighted={true}
-              subtext="Persistent contexts"
-            />
-            <StatCard
-              label="Total Messages"
-              value={summary.total_messages}
-              icon={<ChatCircleText size={22} weight="duotone" />}
-              subtext="Logged in DB"
-            />
-            <StatCard
-              label="Vector Memories"
-              value={summary.total_memories}
-              icon={<HardDrive size={22} weight="duotone" />}
-              subtext="pgvector embeddings"
-            />
-            <StatCard
-              label="API Calls"
-              value={summary.total_api_calls}
-              icon={<Lightning size={22} weight="duotone" />}
-              subtext="Tracked usage"
-            />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                label="Active Rooms"
+                value={summary.total_rooms}
+                icon={<Door size={22} weight="duotone" />}
+                highlighted={true}
+                subtext="Persistent contexts"
+              />
+              <StatCard
+                label="Total Messages"
+                value={summary.total_messages}
+                icon={<ChatCircleText size={22} weight="duotone" />}
+                subtext="Logged in DB"
+              />
+              <StatCard
+                label="Vector Memories"
+                value={summary.total_memories}
+                icon={<HardDrive size={22} weight="duotone" />}
+                subtext="pgvector embeddings"
+              />
+              <StatCard
+                label="API Calls"
+                value={summary.total_api_calls}
+                icon={<Lightning size={22} weight="duotone" />}
+                subtext="Tracked usage"
+              />
+            </div>
+
+            {/* Token & Cost Analytics Row (DeepSeek V4 Flash Pricing) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard
+                label="Total Cost (USD)"
+                value={`$${(summary.total_cost_overall || 0).toFixed(6)}`}
+                icon={<CurrencyDollar size={22} weight="duotone" />}
+                subtext={`In: $${(summary.total_cost_input || 0).toFixed(6)} | Out: $${(summary.total_cost_output || 0).toFixed(6)}`}
+              />
+              <StatCard
+                label="Avg Input Tokens"
+                value={Math.round(summary.avg_tokens_input || 0)}
+                icon={<ArrowDownLeft size={22} weight="duotone" />}
+                subtext="DeepSeek $0.0679 / 1M"
+              />
+              <StatCard
+                label="Avg Output Tokens"
+                value={Math.round(summary.avg_tokens_output || 0)}
+                icon={<ArrowUpRight size={22} weight="duotone" />}
+                subtext="DeepSeek $0.168 / 1M"
+              />
+            </div>
           </div>
         )
       )}

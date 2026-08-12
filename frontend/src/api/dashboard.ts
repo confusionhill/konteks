@@ -5,6 +5,11 @@ export interface UsageSummary {
   total_memories: number;
   total_api_calls: number;
   total_tokens_used: number;
+  avg_tokens_input: number;
+  avg_tokens_output: number;
+  total_cost_input: number;
+  total_cost_output: number;
+  total_cost_overall: number;
 }
 
 export interface RoomOverview {
@@ -22,6 +27,9 @@ export interface Message {
   content: string;
   sequence: number;
   created_at: string;
+  tokens_input?: number;
+  tokens_output?: number;
+  cost_total?: number;
 }
 
 export interface RoomState {

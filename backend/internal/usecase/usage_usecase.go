@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/dika/contextkit/backend/internal/domain"
+	"github.com/dika/contextkit/backend/internal/service"
 )
 
 type usageUsecase struct {
@@ -14,12 +15,18 @@ func NewUsageUsecase(usageRepo domain.UsageRepository) domain.UsageUsecase {
 	return &usageUsecase{usageRepo: usageRepo}
 }
 
-func (u *usageUsecase) RecordUsage(ctx context.Context, tenantID, endpoint string, roomID *string, tokens int) error {
+func (u *usageUsecase) RecordUsage(ctx context.Context, tenantID, endpoint string, roomID *string, tokensIn, tokensOut int) error {
+	costIn, costOut, costTotal := service.CalculateCost(tokensIn, tokensOut)
 	rec := &domain.UsageRecord{
-		TenantID:   tenantID,
-		Endpoint:   endpoint,
-		RoomID:     roomID,
-		TokensUsed: tokens,
+		TenantID:     tenantID,
+		Endpoint:     endpoint,
+		RoomID:       roomID,
+		TokensUsed:   tokensIn + tokensOut,
+		TokensInput:  tokensIn,
+		TokensOutput: tokensOut,
+		CostInput:    costIn,
+		CostOutput:   costOut,
+		CostTotal:    costTotal,
 	}
 	return u.usageRepo.Record(ctx, rec)
 }

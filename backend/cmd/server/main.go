@@ -72,6 +72,14 @@ func main() {
 		log.Println("usage metering migration applied successfully.")
 	}
 
+	migrationFile3 := "db/migrations/000003_token_cost_tracking.up.sql"
+	log.Printf("applying database migrations from %s...", migrationFile3)
+	if err := runMigrations(db, migrationFile3); err != nil {
+		log.Printf("migrations warning (continuing execution): %v", err)
+	} else {
+		log.Println("token & cost tracking migration applied successfully.")
+	}
+
 	// 4. Initialize Core Repositories
 	authRepo := repository.NewAuthRepository(db)
 	roomRepo := repository.NewRoomRepository(db)

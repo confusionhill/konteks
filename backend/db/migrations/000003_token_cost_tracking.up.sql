@@ -1,0 +1,12 @@
+-- Migration 000003: Add per-request token breakdown and cost tracking (DeepSeek V4 Flash pricing)
+ALTER TABLE usage_records 
+    ADD COLUMN IF NOT EXISTS tokens_input INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS tokens_output INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS cost_input NUMERIC(12, 6) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS cost_output NUMERIC(12, 6) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS cost_total NUMERIC(12, 6) NOT NULL DEFAULT 0;
+
+ALTER TABLE messages
+    ADD COLUMN IF NOT EXISTS tokens_input INT DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS tokens_output INT DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS cost_total NUMERIC(12, 6) DEFAULT NULL;

@@ -35,5 +35,9 @@ func (h *ContextHandler) GetContextPackage(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
+	if pkg != nil {
+		c.Set("tokens_input", pkg.TokensEstimated)
+	}
+
 	return c.JSON(http.StatusOK, pkg)
 }

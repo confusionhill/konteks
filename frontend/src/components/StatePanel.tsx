@@ -1,6 +1,6 @@
 import React from 'react';
 import type { RoomState } from '../api/dashboard';
-import { Tag, FileText, Faders } from '@phosphor-icons/react';
+import { Tag, FileText, Faders, Link as LinkIcon, ArrowRight, Sliders } from '@phosphor-icons/react';
 
 interface StatePanelProps {
   state: RoomState | null;
@@ -28,6 +28,7 @@ export const StatePanel: React.FC<StatePanelProps> = ({ state }) => {
   };
 
   const stateVars = parseStateVars(state.state);
+  const references = state.references ? Object.entries(state.references) : [];
 
   return (
     <div className="bg-surface rounded-xl p-6 border border-slate-100 shadow-soft space-y-6">
@@ -36,11 +37,43 @@ export const StatePanel: React.FC<StatePanelProps> = ({ state }) => {
           <Faders size={20} className="text-primary-600" />
           Current Room State
         </h3>
-        {state.active_topic && (
-          <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 font-semibold px-3 py-1 rounded-full text-xs border border-indigo-100">
-            <Tag size={12} weight="bold" />
-            {state.active_topic}
-          </span>
+        <div className="flex items-center gap-2">
+          {state.strategy_used && (
+            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 font-mono font-semibold px-2.5 py-0.5 rounded-full text-xs border border-slate-200">
+              <Sliders size={12} weight="bold" />
+              {state.strategy_used}
+            </span>
+          )}
+          {state.active_topic && (
+            <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 font-semibold px-3 py-1 rounded-full text-xs border border-indigo-100">
+              <Tag size={12} weight="bold" />
+              {state.active_topic}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Phase 2 Resolved References Section */}
+      <div>
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <LinkIcon size={14} className="text-primary-600" />
+          Resolved References (Pronouns)
+        </h4>
+        {references.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {references.map(([src, tgt]) => (
+              <span
+                key={src}
+                className="inline-flex items-center gap-1.5 bg-indigo-50/80 text-xs text-slate-800 px-3 py-1 rounded-lg border border-indigo-100 font-medium"
+              >
+                <span className="font-mono font-bold text-primary-600">"{src}"</span>
+                <ArrowRight size={12} className="text-slate-400" />
+                <span className="font-semibold text-slate-900">{tgt}</span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-slate-400 italic text-sm">No pronoun references resolved yet.</p>
         )}
       </div>
 

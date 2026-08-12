@@ -30,6 +30,10 @@ export interface RoomState {
   active_topic: string;
   state: Record<string, unknown>;
   updated_at: string;
+  references?: Record<string, string>;
+  entities?: Array<{ type: string; id: string; name?: string }>;
+  strategy_used?: string;
+  tokens_estimated?: number;
 }
 
 export interface RoomDetail {

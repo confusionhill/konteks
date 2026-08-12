@@ -158,11 +158,11 @@ response = openai.chat.completions.create(
 - [x] Basic context retrieval (Recent + Semantic)
 - [x] Initial memory provider integration
 
-### Phase 1 — MVP
-- [ ] Stateful Room & Message API
-- [ ] Real-time SSE/Webhooks for conversation events
-- [ ] Managed background summarization & compaction
-- [ ] Usage metering & developer dashboard
+### Phase 1 — MVP (Completed)
+- [x] Stateful Room & Message API
+- [x] Real-time SSE/Webhooks for conversation events
+- [x] Managed background summarization & compaction (bounded worker pool)
+- [x] Usage metering & developer dashboard (Vite + React + TS + Tailwind v3)
 
 ### Phase 2 — Context Engine Refinement
 - [ ] Automatic reference resolution (*"it"*, *"which one"*)

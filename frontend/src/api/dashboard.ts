@@ -17,6 +17,9 @@ export interface RoomOverview {
   external_user_id: string;
   active_topic: string;
   message_count: number;
+  total_tokens_used?: number;
+  total_cost?: number;
+  avg_tokens_per_turn?: number;
   last_active_at: string;
 }
 

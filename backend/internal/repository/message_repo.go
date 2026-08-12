@@ -34,8 +34,8 @@ func (r *messageRepository) Create(ctx context.Context, msg *domain.Message) err
 	msg.Sequence = maxSeq + 1
 
 	query := `
-		INSERT INTO messages (room_id, role, content, sequence)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO messages (room_id, role, content, sequence, tokens_input, tokens_output, cost_total)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at
 	`
 	// To scan fields from RETURNING
@@ -44,7 +44,7 @@ func (r *messageRepository) Create(ctx context.Context, msg *domain.Message) err
 		CreatedAt string `db:"created_at"`
 	}
 	var ins Inserted
-	err = tx.GetContext(ctx, &ins, query, msg.RoomID, msg.Role, msg.Content, msg.Sequence)
+	err = tx.GetContext(ctx, &ins, query, msg.RoomID, msg.Role, msg.Content, msg.Sequence, msg.TokensInput, msg.TokensOutput, msg.CostTotal)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (r *messageRepository) ListByRoom(ctx context.Context, roomID string, limit
 	var args []any
 	if beforeSeq > 0 {
 		query = `
-			SELECT id, room_id, role, content, sequence, created_at
+			SELECT id, room_id, role, content, sequence, created_at, tokens_input, tokens_output, cost_total
 			FROM messages
 			WHERE room_id = $1 AND sequence < $2
 			ORDER BY sequence DESC
@@ -69,7 +69,7 @@ func (r *messageRepository) ListByRoom(ctx context.Context, roomID string, limit
 		args = []any{roomID, beforeSeq, limit}
 	} else {
 		query = `
-			SELECT id, room_id, role, content, sequence, created_at
+			SELECT id, room_id, role, content, sequence, created_at, tokens_input, tokens_output, cost_total
 			FROM messages
 			WHERE room_id = $1
 			ORDER BY sequence DESC

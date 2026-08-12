@@ -31,11 +31,14 @@ type RoomRepository interface {
 }
 
 type RoomOverview struct {
-	ID             string `db:"id" json:"id"`
-	ExternalUserID string `db:"external_user_id" json:"external_user_id"`
-	ActiveTopic    string `db:"active_topic" json:"active_topic"`
-	MessageCount   int    `db:"message_count" json:"message_count"`
-	LastActiveAt   string `db:"last_active_at" json:"last_active_at"`
+	ID               string  `db:"id" json:"id"`
+	ExternalUserID   string  `db:"external_user_id" json:"external_user_id"`
+	ActiveTopic      string  `db:"active_topic" json:"active_topic"`
+	MessageCount     int     `db:"message_count" json:"message_count"`
+	TotalTokensUsed  int     `db:"total_tokens_used" json:"total_tokens_used"`
+	TotalCost        float64 `db:"total_cost" json:"total_cost"`
+	AvgTokensPerTurn float64 `db:"avg_tokens_per_turn" json:"avg_tokens_per_turn"`
+	LastActiveAt     string  `db:"last_active_at" json:"last_active_at"`
 }
 
 type RoomUsecase interface {

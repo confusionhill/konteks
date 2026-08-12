@@ -3,12 +3,15 @@ package domain
 import "context"
 
 type Message struct {
-	ID        string `db:"id" json:"id"`
-	RoomID    string `db:"room_id" json:"room_id"`
-	Role      string `db:"role" json:"role"`
-	Content   string `db:"content" json:"content"`
-	Sequence  int64  `db:"sequence" json:"sequence"`
-	CreatedAt string `db:"created_at" json:"created_at"`
+	ID           string   `db:"id" json:"id"`
+	RoomID       string   `db:"room_id" json:"room_id"`
+	Role         string   `db:"role" json:"role"`
+	Content      string   `db:"content" json:"content"`
+	Sequence     int64    `db:"sequence" json:"sequence"`
+	CreatedAt    string   `db:"created_at" json:"created_at"`
+	TokensInput  *int     `db:"tokens_input" json:"tokens_input,omitempty"`
+	TokensOutput *int     `db:"tokens_output" json:"tokens_output,omitempty"`
+	CostTotal    *float64 `db:"cost_total" json:"cost_total,omitempty"`
 }
 
 type Memory struct {

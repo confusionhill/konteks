@@ -142,12 +142,25 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string) 
 			COALESCE(r.external_user_id, '') AS external_user_id,
 			COALESCE(rs.active_topic, '') AS active_topic,
 			COALESCE(mc.msg_count, 0) AS message_count,
+			COALESCE(uc.total_tokens, 0) AS total_tokens_used,
+			COALESCE(uc.total_cost, 0) AS total_cost,
+			COALESCE(uc.avg_tokens, 0) AS avg_tokens_per_turn,
 			r.updated_at AS last_active_at
 		FROM rooms r
 		LEFT JOIN room_state rs ON rs.room_id = r.id
 		LEFT JOIN (
 			SELECT room_id, COUNT(*) AS msg_count FROM messages GROUP BY room_id
 		) mc ON mc.room_id = r.id
+		LEFT JOIN (
+			SELECT 
+				room_id, 
+				SUM(tokens_used) AS total_tokens, 
+				SUM(cost_total) AS total_cost, 
+				AVG(tokens_used) AS avg_tokens 
+			FROM usage_records 
+			WHERE room_id IS NOT NULL 
+			GROUP BY room_id
+		) uc ON uc.room_id = r.id
 		WHERE r.tenant_id = $1
 		ORDER BY r.updated_at DESC
 		LIMIT 50

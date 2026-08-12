@@ -27,10 +27,20 @@ type RoomRepository interface {
 	Delete(ctx context.Context, tenantID string, roomID string) error
 	GetState(ctx context.Context, roomID string) (*RoomState, error)
 	UpsertState(ctx context.Context, state *RoomState) error
+	ListWithOverview(ctx context.Context, tenantID string) ([]RoomOverview, error)
+}
+
+type RoomOverview struct {
+	ID             string `db:"id" json:"id"`
+	ExternalUserID string `db:"external_user_id" json:"external_user_id"`
+	ActiveTopic    string `db:"active_topic" json:"active_topic"`
+	MessageCount   int    `db:"message_count" json:"message_count"`
+	LastActiveAt   string `db:"last_active_at" json:"last_active_at"`
 }
 
 type RoomUsecase interface {
 	CreateRoom(ctx context.Context, tenantID string, externalUserID string) (*Room, error)
 	GetRoomState(ctx context.Context, tenantID string, roomID string) (*RoomState, error)
 	DeleteRoom(ctx context.Context, tenantID string, roomID string) error
+	ListRoomsOverview(ctx context.Context, tenantID string) ([]RoomOverview, error)
 }

@@ -35,3 +35,7 @@ func (u *roomUsecase) GetRoomState(ctx context.Context, tenantID string, roomID 
 func (u *roomUsecase) DeleteRoom(ctx context.Context, tenantID string, roomID string) error {
 	return u.roomRepo.Delete(ctx, tenantID, roomID)
 }
+
+func (u *roomUsecase) ListRoomsOverview(ctx context.Context, tenantID string) ([]domain.RoomOverview, error) {
+	return u.roomRepo.ListWithOverview(ctx, tenantID)
+}

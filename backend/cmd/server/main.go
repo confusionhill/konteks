@@ -64,12 +64,21 @@ func main() {
 		log.Println("database migrations applied successfully.")
 	}
 
+	migrationFile2 := "db/migrations/000002_usage_metering.up.sql"
+	log.Printf("applying database migrations from %s...", migrationFile2)
+	if err := runMigrations(db, migrationFile2); err != nil {
+		log.Printf("migrations warning (continuing execution): %v", err)
+	} else {
+		log.Println("usage metering migration applied successfully.")
+	}
+
 	// 4. Initialize Core Repositories
 	authRepo := repository.NewAuthRepository(db)
 	roomRepo := repository.NewRoomRepository(db)
 	messageRepo := repository.NewMessageRepository(db)
 	memoryRepo := repository.NewMemoryRepository(db)
 	eventRepo := repository.NewEventRepository(db)
+	usageRepo := repository.NewUsageRepository(db)
 
 	// 5. Initialize Services & Clients
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
@@ -79,6 +88,7 @@ func main() {
 	messageUsecase := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient)
 	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient)
 	eventUsecase := usecase.NewEventUsecase(roomRepo, eventRepo)
+	usageUsecase := usecase.NewUsageUsecase(usageRepo)
 
 	// 7. Initialize Echo REST API Handlers
 	eventBroker := handler.NewEventBroker()
@@ -88,6 +98,7 @@ func main() {
 	messageHandler := handler.NewMessageHandler(messageUsecase)
 	contextHandler := handler.NewContextHandler(contextUsecase)
 	eventHandler := handler.NewEventHandler(eventUsecase, eventBroker)
+	dashboardHandler := handler.NewDashboardHandler(usageUsecase, roomUsecase, messageUsecase, roomRepo)
 
 	// 8. Initialize Echo HTTP Router
 	e := echo.New()
@@ -107,6 +118,7 @@ func main() {
 	// Authorized Routes V1
 	v1 := e.Group("/v1")
 	v1.Use(authMiddleware)
+	v1.Use(handler.UsageTrackingMiddleware(usageUsecase))
 
 	// Rooms API
 	v1.POST("/rooms", roomHandler.CreateRoom)
@@ -123,6 +135,11 @@ func main() {
 	// Events & SSE Logging API
 	v1.POST("/rooms/:room_id/events", eventHandler.LogEvent)
 	v1.GET("/rooms/:room_id/events", eventHandler.StreamEvents)
+
+	// Dashboard API
+	v1.GET("/dashboard/summary", dashboardHandler.GetSummary)
+	v1.GET("/dashboard/rooms", dashboardHandler.ListRooms)
+	v1.GET("/dashboard/rooms/:room_id", dashboardHandler.GetRoomDetail)
 
 	// 9. Bind Listeners & Listen
 	serverPort := fmt.Sprintf(":%d", cfg.Port)

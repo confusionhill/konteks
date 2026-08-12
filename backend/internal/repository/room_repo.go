@@ -134,3 +134,29 @@ func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomStat
 
 	return tx.Commit()
 }
+
+func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string) ([]domain.RoomOverview, error) {
+	query := `
+		SELECT
+			r.id,
+			COALESCE(r.external_user_id, '') AS external_user_id,
+			COALESCE(rs.active_topic, '') AS active_topic,
+			COALESCE(mc.msg_count, 0) AS message_count,
+			r.updated_at AS last_active_at
+		FROM rooms r
+		LEFT JOIN room_state rs ON rs.room_id = r.id
+		LEFT JOIN (
+			SELECT room_id, COUNT(*) AS msg_count FROM messages GROUP BY room_id
+		) mc ON mc.room_id = r.id
+		WHERE r.tenant_id = $1
+		ORDER BY r.updated_at DESC
+		LIMIT 50
+	`
+	var overviews []domain.RoomOverview
+	err := r.db.SelectContext(ctx, &overviews, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return overviews, nil
+}
+

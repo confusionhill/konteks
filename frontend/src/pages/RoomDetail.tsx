@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { fetchRoomDetail } from '../api/dashboard';
-import type { RoomDetail } from '../api/dashboard';
+import { fetchRoomDetail, fetchMessages } from '../api/dashboard';
+import type { RoomDetail, Message } from '../api/dashboard';
 import { StatePanel } from '../components/StatePanel';
 import { MessageList } from '../components/MessageList';
 import { DetailSkeleton } from '../components/Skeleton';
@@ -10,6 +10,9 @@ import { ArrowLeft, User, Calendar, Warning, CurrencyDollar, Coins, Lightning } 
 export const RoomDetailPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const [detail, setDetail] = useState<RoomDetail | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +24,10 @@ export const RoomDetailPage: React.FC = () => {
         setError(null);
         const data = await fetchRoomDetail(roomId);
         setDetail(data);
+        setMessages(data.messages || []);
+        // The default server-side list returns up to 50 messages on detail page.
+        // If it returns exactly 50, there might be more to paginate.
+        setHasMore(data.messages ? data.messages.length >= 50 : false);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load room details');
       } finally {
@@ -29,6 +36,22 @@ export const RoomDetailPage: React.FC = () => {
     }
     loadRoom();
   }, [roomId]);
+
+  const handleLoadMore = async () => {
+    if (!roomId || messages.length === 0) return;
+    try {
+      setLoadingMore(true);
+      // Prepend older messages by passing the sequence of the currently oldest loaded message
+      const oldestSeq = messages[0].sequence;
+      const resp = await fetchMessages(roomId, 20, oldestSeq);
+      setMessages((prev) => [...resp.messages, ...prev]);
+      setHasMore(resp.has_more);
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -123,7 +146,12 @@ export const RoomDetailPage: React.FC = () => {
         detail && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <StatePanel state={detail.state} />
-            <MessageList messages={detail.messages} />
+            <MessageList 
+              messages={messages} 
+              hasMore={hasMore} 
+              onLoadMore={handleLoadMore} 
+              loadingMore={loadingMore} 
+            />
           </div>
         )
       )}

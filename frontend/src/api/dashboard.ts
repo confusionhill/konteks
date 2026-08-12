@@ -80,8 +80,35 @@ export async function fetchSummary(): Promise<UsageSummary> {
   return res.json();
 }
 
-export async function fetchRooms(): Promise<RoomOverview[]> {
-  const res = await fetch('/v1/dashboard/rooms', { headers: getAuthHeaders() });
+export interface RoomsResponse {
+  rooms: RoomOverview[];
+  total: number;
+}
+
+export interface MessagesResponse {
+  messages: Message[];
+  has_more: boolean;
+}
+
+export async function fetchRooms(options?: {
+  search?: string;
+  sortBy?: string;
+  sortOrder?: string;
+  page?: number;
+  limit?: number;
+  minMessages?: number;
+}): Promise<RoomsResponse> {
+  const params = new URLSearchParams();
+  if (options) {
+    if (options.search) params.append('search', options.search);
+    if (options.sortBy) params.append('sort_by', options.sortBy);
+    if (options.sortOrder) params.append('sort_order', options.sortOrder);
+    if (options.page) params.append('page', options.page.toString());
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.minMessages) params.append('min_messages', options.minMessages.toString());
+  }
+  const queryString = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`/v1/dashboard/rooms${queryString}`, { headers: getAuthHeaders() });
   if (!res.ok) {
     throw new Error(`Failed to fetch rooms: ${res.statusText}`);
   }
@@ -92,6 +119,23 @@ export async function fetchRoomDetail(roomId: string): Promise<RoomDetail> {
   const res = await fetch(`/v1/dashboard/rooms/${roomId}`, { headers: getAuthHeaders() });
   if (!res.ok) {
     throw new Error(`Failed to fetch room details: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchMessages(
+  roomId: string,
+  limit: number = 20,
+  beforeSequence?: number
+): Promise<MessagesResponse> {
+  const params = new URLSearchParams();
+  params.append('limit', limit.toString());
+  if (beforeSequence !== undefined && beforeSequence > 0) {
+    params.append('before_sequence', beforeSequence.toString());
+  }
+  const res = await fetch(`/v1/rooms/${roomId}/messages?${params.toString()}`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch messages: ${res.statusText}`);
   }
   return res.json();
 }

@@ -4,9 +4,12 @@ import { Robot, User, Coins } from '@phosphor-icons/react';
 
 interface MessageListProps {
   messages: Message[];
+  hasMore: boolean;
+  onLoadMore: () => void;
+  loadingMore: boolean;
 }
 
-export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
+export const MessageList: React.FC<MessageListProps> = ({ messages, hasMore, onLoadMore, loadingMore }) => {
   if (messages.length === 0) {
     return (
       <div className="bg-surface rounded-xl p-6 border border-slate-100 shadow-soft">
@@ -38,6 +41,17 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
       </div>
 
       <div className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto p-1">
+        {hasMore && (
+          <div className="flex justify-center p-2 mb-2 border-b border-slate-50">
+            <button
+              onClick={onLoadMore}
+              disabled={loadingMore}
+              className="text-xs font-bold text-primary-600 hover:text-primary-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-1.5 rounded-lg border border-indigo-100 transition-colors disabled:opacity-50 shadow-soft"
+            >
+              {loadingMore ? 'Loading older...' : 'Load Older Messages'}
+            </button>
+          </div>
+        )}
         {messages.map((msg, idx) => {
           const isUser = msg.role === 'user';
           const hasTokens = msg.tokens_input !== undefined || msg.tokens_output !== undefined;

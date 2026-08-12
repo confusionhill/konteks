@@ -40,11 +40,25 @@ func LoadConfig(path string) (*Config, error) {
 	if envAPIKey := os.Getenv("OPENROUTER_API_KEY"); envAPIKey != "" {
 		cfg.OpenRouterAPIKey = envAPIKey
 	}
+	if envBaseURL := os.Getenv("OPENROUTER_BASE_URL"); envBaseURL != "" {
+		cfg.OpenRouterBaseURL = envBaseURL
+	}
 	if envEmbeddingModel := os.Getenv("OPENROUTER_EMBEDDING_MODEL"); envEmbeddingModel != "" {
 		cfg.OpenRouterEmbeddingModel = envEmbeddingModel
 	}
 	if envChatModel := os.Getenv("OPENROUTER_CHAT_MODEL"); envChatModel != "" {
 		cfg.OpenRouterChatModel = envChatModel
+	}
+
+	// Default fallbacks
+	if cfg.OpenRouterBaseURL == "" {
+		cfg.OpenRouterBaseURL = "https://openrouter.ai/api/v1"
+	}
+	if cfg.OpenRouterChatModel == "" {
+		cfg.OpenRouterChatModel = "deepseek/deepseek-chat"
+	}
+	if cfg.OpenRouterEmbeddingModel == "" {
+		cfg.OpenRouterEmbeddingModel = "qwen/qwen3-embedding-8b"
 	}
 
 	return &cfg, nil

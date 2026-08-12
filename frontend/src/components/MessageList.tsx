@@ -29,24 +29,25 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
   };
 
   return (
-    <div className="bg-surface rounded-xl border border-slate-100 shadow-soft overflow-hidden">
-      <div className="p-4 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+    <div className="bg-surface rounded-xl border border-slate-100 shadow-soft overflow-hidden flex flex-col h-full">
+      <div className="p-4 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between shrink-0">
         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
           Message Log ({messages.length})
         </h3>
         <span className="text-xs font-mono text-slate-400">Sequential History</span>
       </div>
 
-      <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+      <div className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto p-1">
         {messages.map((msg, idx) => {
           const isUser = msg.role === 'user';
           const hasTokens = msg.tokens_input !== undefined || msg.tokens_output !== undefined;
+          const textContent = msg.content ? msg.content.trim() : '';
 
           return (
             <div
               key={msg.id || idx}
-              className={`p-4 transition-colors ${
-                isUser ? 'bg-surface' : 'bg-slate-50/50'
+              className={`p-4 transition-colors rounded-lg my-1 ${
+                isUser ? 'bg-surface border border-slate-100 shadow-xs' : 'bg-slate-50/60'
               }`}
             >
               <div className="flex items-center justify-between mb-2">
@@ -62,13 +63,13 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
                     {msg.role}
                   </span>
 
-                  {/* Render token & cost badge for new tracked messages (leave older NULL messages blank) */}
+                  {/* Render token & cost badge for new tracked messages */}
                   {hasTokens && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                       <Coins size={12} className="text-amber-500" />
-                      {msg.tokens_input ? `in: ${msg.tokens_input}` : ''}
-                      {msg.tokens_output ? ` | out: ${msg.tokens_output}` : ''}
-                      {msg.cost_total ? ` ($${msg.cost_total.toFixed(6)})` : ''}
+                      {msg.tokens_input !== undefined ? `in: ${msg.tokens_input}` : ''}
+                      {msg.tokens_output !== undefined ? ` | out: ${msg.tokens_output}` : ''}
+                      {msg.cost_total !== undefined ? ` ($${msg.cost_total.toFixed(6)})` : ''}
                     </span>
                   )}
                 </div>
@@ -78,9 +79,13 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
                 </span>
               </div>
 
-              <p className="text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap pl-1">
-                {msg.content}
-              </p>
+              <div className="text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap pl-1 break-words">
+                {textContent ? (
+                  textContent
+                ) : (
+                  <span className="italic text-slate-400 text-xs">(No text content recorded)</span>
+                )}
+              </div>
             </div>
           );
         })}

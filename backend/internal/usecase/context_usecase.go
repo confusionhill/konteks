@@ -63,6 +63,22 @@ func classifyStrategy(query string) string {
 	return "hybrid"
 }
 
+func hasPronouns(query string) bool {
+	q := strings.ToLower(strings.TrimSpace(query))
+	pronouns := []string{" it ", " that ", " which ", " this ", " them ", " option "}
+	padded := " " + q + " "
+	for _, p := range pronouns {
+		if strings.Contains(padded, p) {
+			return true
+		}
+	}
+	// Short query under 3 words is highly likely to be a pronoun/follow-up reference
+	if len(strings.Fields(q)) <= 3 && q != "" {
+		return true
+	}
+	return false
+}
+
 func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string, roomID string, req domain.GetContextRequest) (*domain.ContextPackage, error) {
 	// 1. Verify room ownership
 	room, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
@@ -73,13 +89,43 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		return nil, fmt.Errorf("room not found or unauthorized")
 	}
 
-	// 2. Determine retrieval strategy
-	strategy := req.Policy.Strategy
+	// 2. Merge Policy Options
+	policy := req.Policy
+	if room.DefaultPolicy != nil {
+		if policy.MaxTokens <= 0 {
+			policy.MaxTokens = room.DefaultPolicy.MaxTokens
+		}
+		if policy.MaxHistoryDepth <= 0 {
+			policy.MaxHistoryDepth = room.DefaultPolicy.MaxHistoryDepth
+		}
+		if policy.FreshnessWeight <= 0 {
+			policy.FreshnessWeight = room.DefaultPolicy.FreshnessWeight
+		}
+		if policy.Strategy == "" {
+			policy.Strategy = room.DefaultPolicy.Strategy
+		}
+		if policy.MinRelevanceScore <= 0 {
+			policy.MinRelevanceScore = room.DefaultPolicy.MinRelevanceScore
+		}
+	}
+
+	// Apply global defaults if still unset
+	if policy.MaxTokens <= 0 {
+		policy.MaxTokens = 4000
+	}
+	if policy.MaxHistoryDepth <= 0 {
+		policy.MaxHistoryDepth = 50
+	}
+	if policy.FreshnessWeight <= 0 {
+		policy.FreshnessWeight = 0.5
+	}
+
+	// 3. Determine Strategy
+	strategy := policy.Strategy
 	if strategy == "" || strategy == "auto" {
 		strategy = classifyStrategy(req.Query)
 	}
 
-	// Set parameters based on strategy
 	msgLimit := 10
 	memLimit := 5
 	switch strategy {
@@ -94,7 +140,12 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		memLimit = 5
 	}
 
-	// 3. Fetch RoomState
+	// Limit history by the MaxHistoryDepth policy constraint
+	if msgLimit > policy.MaxHistoryDepth {
+		msgLimit = policy.MaxHistoryDepth
+	}
+
+	// 4. Fetch RoomState
 	state, err := u.roomRepo.GetState(ctx, roomID)
 	if err != nil {
 		return nil, err
@@ -108,18 +159,31 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		}
 	}
 
-	var parsedState any
-	if err := json.Unmarshal(state.State, &parsedState); err != nil {
-		parsedState = make(map[string]any)
-	}
-
-	// 4. Retrieve recent message history
+	// 5. Retrieve recent message history
 	history, err := u.messageRepo.ListByRoom(ctx, roomID, msgLimit, 0)
 	if err != nil {
 		history = []domain.Message{}
 	}
 
-	// 5. Search semantic memories if query is provided
+	// 6. Dynamic schema extraction override on-the-fly
+	if len(req.DynamicSchema) > 0 && string(req.DynamicSchema) != "null" && string(req.DynamicSchema) != "{}" {
+		log.Printf("[Context Engine]: dynamic schema provided. Performing on-the-fly state extraction...")
+		newSummary, activeTopic, extractedState, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(req.DynamicSchema))
+		if errExtract != nil {
+			log.Printf("[Context Engine State Extraction Error]: %v", errExtract)
+		} else {
+			state.Summary = newSummary
+			state.ActiveTopic = activeTopic
+			state.State = json.RawMessage(extractedState)
+		}
+	}
+
+	var parsedState any
+	if err := json.Unmarshal(state.State, &parsedState); err != nil {
+		parsedState = make(map[string]any)
+	}
+
+	// 7. Search semantic memories
 	var matchedMemories []domain.Memory
 	if req.Query != "" {
 		embedding, errEmbedding := u.openRouterClient.GenerateEmbedding(ctx, req.Query)
@@ -131,17 +195,18 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 				extUserID = &room.ExternalUserID
 			}
 			var errSearch error
-			matchedMemories, errSearch = u.memoryRepo.SearchSemantic(ctx, roomID, extUserID, embedding, memLimit)
+			matchedMemories, errSearch = u.memoryRepo.SearchSemantic(ctx, roomID, extUserID, embedding, policy.FreshnessWeight, memLimit)
 			if errSearch != nil {
 				log.Printf("[Context Memory Search Error]: %v", errSearch)
 			}
 		}
 	}
 
-	// 6. Perform Reference Resolution via OpenRouter (DeepSeek) if history exists
+	// 8. Smart-Sync Reference Resolution (Pronoun check)
 	references := make(map[string]string)
 	entities := []domain.Entity{}
-	if len(history) > 0 {
+	if len(history) > 0 && hasPronouns(req.Query) {
+		log.Printf("[Context Engine]: Pronoun detected in query. Resolving references...")
 		var errRef error
 		references, entities, errRef = u.openRouterClient.ResolveReferences(ctx, history, string(state.State))
 		if errRef != nil {
@@ -149,33 +214,62 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 			references = make(map[string]string)
 			entities = []domain.Entity{}
 		} else {
-			// Persist resolved references & entities to DB so Dashboard can read them with 0 LLM cost
+			// Persist resolved references & entities
 			state.References = references
 			state.Entities = entities
 			_ = u.roomRepo.UpsertState(ctx, state)
 		}
+	} else if len(history) > 0 {
+		// Use cached references if any
+		references = state.References
+		entities = state.Entities
+		if references == nil {
+			references = make(map[string]string)
+		}
 	}
 
-	// 7. Token Budget Allocator & Policy Enforcer
-	maxTokens := req.Policy.MaxTokens
-	if maxTokens <= 0 {
-		maxTokens = 4000 // default budget cap
+	// 9. Greedy Token Packing
+	budgetRemaining := policy.MaxTokens
+
+	// Essential elements: Summary & State
+	summaryTokens := len(state.Summary) / 4
+	stateTokens := len(string(state.State)) / 4
+	budgetRemaining -= (summaryTokens + stateTokens)
+	if budgetRemaining < 0 {
+		budgetRemaining = 0
 	}
 
-	// Rough token estimation: char_length / 4
-	estimatedTokens := (len(state.Summary) + len(string(state.State))) / 4
-	for _, m := range history {
+	// Pack messages from newest to oldest
+	var packedMessages []domain.Message
+	for i := len(history) - 1; i >= 0; i-- {
+		msgTokens := len(history[i].Content) / 4
+		if budgetRemaining >= msgTokens {
+			packedMessages = append([]domain.Message{history[i]}, packedMessages...)
+			budgetRemaining -= msgTokens
+		} else {
+			break
+		}
+	}
+
+	// Pack memories from highest ranking to lowest
+	var packedMemories []domain.Memory
+	for _, mem := range matchedMemories {
+		memTokens := len(mem.Content) / 4
+		if budgetRemaining >= memTokens {
+			packedMemories = append(packedMemories, mem)
+			budgetRemaining -= memTokens
+		} else {
+			break
+		}
+	}
+
+	// Final estimated tokens sum
+	estimatedTokens := summaryTokens + stateTokens
+	for _, m := range packedMessages {
 		estimatedTokens += len(m.Content) / 4
 	}
-	for _, mem := range matchedMemories {
+	for _, mem := range packedMemories {
 		estimatedTokens += len(mem.Content) / 4
-	}
-
-	// Truncate lowest-scoring memories if budget exceeded
-	for estimatedTokens > maxTokens && len(matchedMemories) > 0 {
-		removed := matchedMemories[len(matchedMemories)-1]
-		matchedMemories = matchedMemories[:len(matchedMemories)-1]
-		estimatedTokens -= len(removed.Content) / 4
 	}
 
 	pkg := &domain.ContextPackage{
@@ -183,8 +277,8 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		Summary:          state.Summary,
 		ActiveTopic:      state.ActiveTopic,
 		State:            parsedState,
-		RelevantMessages: history,
-		Memories:         matchedMemories,
+		RelevantMessages: packedMessages,
+		Memories:         packedMemories,
 		Entities:         entities,
 		References:       references,
 		StrategyUsed:     strategy,

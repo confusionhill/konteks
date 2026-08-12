@@ -99,7 +99,7 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 	if err == nil && len(history) > 0 {
 		// 5. Synchronously extract summary, active topic, and state payload
 		log.Printf("[Background Worker]: extracting topic, summary, and state variables...")
-		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary)
+		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(room.StateSchema))
 		if err != nil {
 			log.Printf("[Background Worker State Extraction Error]: failed to extract state: %v", err)
 		} else {

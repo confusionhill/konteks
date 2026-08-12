@@ -33,8 +33,6 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 		VALUES ($1, $2)
 		RETURNING id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy
 	`
-	var schema sql.NullString
-	var policy sql.NullString
 	type rawRoom struct {
 		ID             string         `db:"id"`
 		TenantID       string         `db:"tenant_id"`
@@ -44,24 +42,24 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 		StateSchema    sql.NullString `db:"state_schema"`
 		DefaultPolicy  sql.NullString `db:"default_policy"`
 	}
-	var r rawRoom
-	err = tx.GetContext(ctx, &r, queryRoom, tenantID, externalUserID)
+	var rr rawRoom
+	err = tx.GetContext(ctx, &rr, queryRoom, tenantID, externalUserID)
 	if err != nil {
 		return nil, err
 	}
 	room = domain.Room{
-		ID:             r.ID,
-		TenantID:       r.TenantID,
-		ExternalUserID: r.ExternalUserID,
-		CreatedAt:      r.CreatedAt,
-		UpdatedAt:      r.UpdatedAt,
+		ID:             rr.ID,
+		TenantID:       rr.TenantID,
+		ExternalUserID: rr.ExternalUserID,
+		CreatedAt:      rr.CreatedAt,
+		UpdatedAt:      rr.UpdatedAt,
 	}
-	if r.StateSchema.Valid {
-		room.StateSchema = []byte(r.StateSchema.String)
+	if rr.StateSchema.Valid {
+		room.StateSchema = []byte(rr.StateSchema.String)
 	}
-	if r.DefaultPolicy.Valid {
+	if rr.DefaultPolicy.Valid {
 		var p domain.ContextPolicy
-		_ = json.Unmarshal([]byte(r.DefaultPolicy.String), &p)
+		_ = json.Unmarshal([]byte(rr.DefaultPolicy.String), &p)
 		room.DefaultPolicy = &p
 	}
 
@@ -97,8 +95,8 @@ func (r *roomRepository) GetByID(ctx context.Context, tenantID string, roomID st
 		StateSchema    sql.NullString `db:"state_schema"`
 		DefaultPolicy  sql.NullString `db:"default_policy"`
 	}
-	var r rawRoom
-	err := r.db.GetContext(ctx, &r, query, tenantID, roomID)
+	var rr rawRoom
+	err := r.db.GetContext(ctx, &rr, query, tenantID, roomID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found
@@ -106,18 +104,18 @@ func (r *roomRepository) GetByID(ctx context.Context, tenantID string, roomID st
 		return nil, err
 	}
 	room := domain.Room{
-		ID:             r.ID,
-		TenantID:       r.TenantID,
-		ExternalUserID: r.ExternalUserID,
-		CreatedAt:      r.CreatedAt,
-		UpdatedAt:      r.UpdatedAt,
+		ID:             rr.ID,
+		TenantID:       rr.TenantID,
+		ExternalUserID: rr.ExternalUserID,
+		CreatedAt:      rr.CreatedAt,
+		UpdatedAt:      rr.UpdatedAt,
 	}
-	if r.StateSchema.Valid && r.StateSchema.String != "" {
-		room.StateSchema = []byte(r.StateSchema.String)
+	if rr.StateSchema.Valid && rr.StateSchema.String != "" {
+		room.StateSchema = []byte(rr.StateSchema.String)
 	}
-	if r.DefaultPolicy.Valid && r.DefaultPolicy.String != "" {
+	if rr.DefaultPolicy.Valid && rr.DefaultPolicy.String != "" {
 		var p domain.ContextPolicy
-		_ = json.Unmarshal([]byte(r.DefaultPolicy.String), &p)
+		_ = json.Unmarshal([]byte(rr.DefaultPolicy.String), &p)
 		room.DefaultPolicy = &p
 	}
 	return &room, nil

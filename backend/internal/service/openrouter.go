@@ -108,7 +108,7 @@ type extractionJSON struct {
 	State       json.RawMessage `json:"state"`
 }
 
-func (s *openRouterServiceClient) ExtractStateAndSummary(ctx context.Context, history []domain.Message, currentSummary string) (string, string, string, error) {
+func (s *openRouterServiceClient) ExtractStateAndSummary(ctx context.Context, history []domain.Message, currentSummary string, schemaJSON string) (string, string, string, error) {
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(s.cfg.OpenRouterBaseURL, "/"))
 
 	systemPrompt := `You are a conversation state and summary extraction engine. Analyze the conversation history and the current summary to produce an updated state package.
@@ -123,6 +123,10 @@ Guidelines:
 1. 'summary': Keep it concise but ensure it captures context (e.g., "User is comparing budget hotels in Bali").
 2. 'active_topic': Briefly name the active user intent.
 3. 'state': A flat JSON object containing key-value pairs representing parameters discussed so far (e.g., budget, location, date, amenities). Retain existing state parameters unless they are explicitly updated, refuted, or changed in the new turn.`
+
+	if schemaJSON != "" && schemaJSON != "{}" && schemaJSON != "null" {
+		systemPrompt += fmt.Sprintf("\n\nCRITICAL: The 'state' object in the output MUST adhere strictly to this schema: %s", schemaJSON)
+	}
 
 	// Formulate history string
 	var histBuilder strings.Builder

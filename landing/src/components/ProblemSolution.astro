@@ -1,0 +1,59 @@
+---
+---
+
+<section id="why-konteks" class="py-20 md:py-28 bg-[#F8FAFC]">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    
+    <!-- Section Header -->
+    <div class="text-center max-w-3xl mx-auto space-y-4 mb-16">
+      <span class="text-xs font-bold uppercase tracking-wider text-indigo-600 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200/60">
+        The Production Challenge
+      </span>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+        Why standard AI chat gets messy in production
+      </h2>
+      <p class="text-slate-600 text-base sm:text-lg">
+        Building a basic chat bot is simple. But as user conversations grow long and complex, LLM apps face three major bottlenecks.
+      </p>
+    </div>
+
+    <!-- 3 Simple Problem Cards -->
+    <div class="grid md:grid-cols-3 gap-8">
+      
+      <!-- Card 1 -->
+      <div class="bg-white p-8 rounded-xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200">
+        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-xl mb-6">
+          💸
+        </div>
+        <h3 class="text-xl font-bold text-slate-900 mb-3">High API Bills (Token Bloat)</h3>
+        <p class="text-slate-600 text-sm leading-relaxed">
+          Sending entire raw conversation histories to OpenAI or Claude burns budget fast. Konteks automatically condenses long chat logs into tiny, highly relevant summaries.
+        </p>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="bg-white p-8 rounded-xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200">
+        <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xl mb-6">
+          🧠
+        </div>
+        <h3 class="text-xl font-bold text-slate-900 mb-3">Memory Loss ("What did I say?")</h3>
+        <p class="text-slate-600 text-sm leading-relaxed">
+          When users ask <em>"Which one was cheaper?"</em> or <em>"Move it to Friday"</em>, standard agents lose track of context. Konteks links pronouns directly to the exact topic or entity.
+        </p>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="bg-white p-8 rounded-xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200">
+        <div class="w-12 h-12 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center font-bold text-xl mb-6">
+          ⏱️
+        </div>
+        <h3 class="text-xl font-bold text-slate-900 mb-3">Slow & Cluttered Responses</h3>
+        <p class="text-slate-600 text-sm leading-relaxed">
+          Huge prompt contexts slow down LLM response generation and increase hallucination risks. Konteks serves lean, structured context in milliseconds.
+        </p>
+      </div>
+
+    </div>
+
+  </div>
+</section>

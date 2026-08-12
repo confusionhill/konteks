@@ -28,3 +28,12 @@ example/
 venv/
 __pycache__/
 server
+
+# Node / Frontend / Landing
+node_modules/
+landing/node_modules/
+landing/dist/
+landing/.astro/
+frontend/node_modules/
+frontend/dist/
+.npm/

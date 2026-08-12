@@ -1,0 +1,42 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { 
+  title = "Konteks — Context Infrastructure for AI Agents",
+  description = "Model-agnostic Context-as-a-Service layer that manages stateful AI conversations, entity resolution, and chat compaction."
+} = Astro.props;
+
+import '../styles/global.css';
+---
+
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth bg-slate-50 text-slate-900 selection:bg-indigo-500 selection:text-white">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    
+    <!-- Primary Meta Tags -->
+    <title>{title}</title>
+    <meta name="title" content={title} />
+    <meta name="description" content={description} />
+
+    <!-- Google Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  </head>
+  <body class="min-h-screen font-sans antialiased bg-[#F8FAFC] text-slate-900 relative overflow-x-hidden">
+    <!-- Atmospheric Background Glow Orbs -->
+    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] pointer-events-none -z-10 overflow-hidden">
+      <div class="absolute -top-32 left-1/4 w-[500px] h-[500px] rounded-full bg-indigo-500/10 blur-[120px]"></div>
+      <div class="absolute top-20 right-1/4 w-[400px] h-[400px] rounded-full bg-violet-500/10 blur-[100px]"></div>
+    </div>
+
+    <slot />
+  </body>
+</html>

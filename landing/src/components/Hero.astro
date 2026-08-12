@@ -1,0 +1,70 @@
+---
+import HeroPreview from './HeroPreview';
+---
+
+<section class="relative pt-12 pb-20 md:pt-20 md:pb-32 overflow-hidden">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+      
+      <!-- Hero Left Text Column -->
+      <div class="lg:col-span-7 space-y-6 text-left">
+        <!-- Top Pill Badge -->
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200/60 shadow-sm">
+          <span class="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+          <span class="text-xs font-bold tracking-wide text-indigo-700 uppercase">Context Infrastructure for AI Agents</span>
+        </div>
+
+        <!-- Main H1 Headline -->
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-[1.1]">
+          You build the agent. <br class="hidden sm:inline" />
+          <span class="bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 bg-clip-text text-transparent">
+            We handle its context.
+          </span>
+        </h1>
+
+        <!-- Subheadline -->
+        <p class="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl">
+          Stop wasting tokens and losing chat history. Konteks remembers what your user said, cleans up your context window, and feeds your AI agent the exact information it needs for every turn.
+        </p>
+
+        <!-- CTA Action Buttons -->
+        <div class="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+          <a href="#quickstart" class="inline-flex items-center justify-center text-base font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 px-6 py-3.5 rounded-xl shadow-btn-indigo hover:-translate-y-0.5 transition-all duration-200 group">
+            Start Free in 5 Mins
+            <svg class="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+            </svg>
+          </a>
+          <a href="#how-it-works" class="inline-flex items-center justify-center text-base font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 px-6 py-3.5 rounded-xl transition-colors">
+            View 5-Minute Quickstart
+          </a>
+        </div>
+
+        <!-- Micro Features / Trust points -->
+        <div class="pt-4 flex flex-wrap items-center gap-y-2 gap-x-6 text-xs font-semibold text-slate-500">
+          <span class="flex items-center gap-1.5 text-emerald-600">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Plug & Play with OpenAI & Claude
+          </span>
+          <span class="flex items-center gap-1.5 text-indigo-600">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            No DB Migration Needed
+          </span>
+          <span class="flex items-center gap-1.5 text-violet-600">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            80% Lower Token Bills
+          </span>
+        </div>
+      </div>
+
+      <!-- Hero Right Preview Graphic -->
+      <div class="lg:col-span-5 relative">
+        <!-- Isometric depth wrapper -->
+        <div class="relative z-10">
+          <HeroPreview client:load />
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>

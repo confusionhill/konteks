@@ -1,0 +1,28 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import Hero from '../components/Hero.astro';
+import Metrics from '../components/Metrics.astro';
+import ProblemSolution from '../components/ProblemSolution.astro';
+import Architecture from '../components/Architecture.astro';
+import BentoGrid from '../components/BentoGrid.astro';
+import QuickStart from '../components/QuickStart';
+import DashboardTeaser from '../components/DashboardTeaser.astro';
+import CTA from '../components/CTA.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Layout title="Konteks — You build the agent. We handle its context.">
+  <Navbar />
+  <main>
+    <Hero />
+    <Metrics />
+    <ProblemSolution />
+    <Architecture />
+    <BentoGrid />
+    <QuickStart client:visible />
+    <DashboardTeaser />
+    <CTA />
+  </main>
+  <Footer />
+</Layout>

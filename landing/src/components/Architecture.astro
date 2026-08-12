@@ -1,0 +1,68 @@
+---
+---
+
+<section id="how-it-works" class="py-20 md:py-28 bg-white border-t border-slate-200/60">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    
+    <!-- Section Header -->
+    <div class="text-center max-w-3xl mx-auto space-y-4 mb-16">
+      <span class="text-xs font-bold uppercase tracking-wider text-violet-600 px-3 py-1 rounded-full bg-violet-50 border border-violet-200/60">
+        3-Step Integration
+      </span>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+        How Konteks fits seamlessly into your app
+      </h2>
+      <p class="text-slate-600 text-base sm:text-lg">
+        You keep your existing LLM prompts, reasoning logic, and tools. Konteks sits underneath as your intelligent memory and context layer.
+      </p>
+    </div>
+
+    <!-- 3 Step Process Grid -->
+    <div class="grid lg:grid-cols-3 gap-8">
+      
+      <!-- Step 1 -->
+      <div class="relative bg-slate-50 p-8 rounded-xl border border-slate-200/80 space-y-4">
+        <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white font-extrabold text-lg flex items-center justify-center shadow-md shadow-indigo-500/20">
+          1
+        </div>
+        <h3 class="text-xl font-bold text-slate-900">Save User Messages</h3>
+        <p class="text-slate-600 text-sm leading-relaxed">
+          Whenever a user sends a message, store it into a stateful Konteks <code>Room</code> via a simple API call.
+        </p>
+        <div class="p-3 bg-slate-900 rounded-lg text-slate-200 font-mono text-xs overflow-x-auto">
+          POST /v1/rooms/room_123/messages
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="relative bg-slate-50 p-8 rounded-xl border border-slate-200/80 space-y-4">
+        <div class="w-10 h-10 rounded-lg bg-violet-600 text-white font-extrabold text-lg flex items-center justify-center shadow-md shadow-violet-500/20">
+          2
+        </div>
+        <h3 class="text-xl font-bold text-slate-900">Get Clean Context</h3>
+        <p class="text-slate-600 text-sm leading-relaxed">
+          Fetch the optimal context package—automatically compiled with relevant history, active state, and entity links.
+        </p>
+        <div class="p-3 bg-slate-900 rounded-lg text-slate-200 font-mono text-xs overflow-x-auto">
+          POST /v1/rooms/room_123/context
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="relative bg-slate-50 p-8 rounded-xl border border-slate-200/80 space-y-4">
+        <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white font-extrabold text-lg flex items-center justify-center shadow-md shadow-indigo-500/20">
+          3
+        </div>
+        <h3 class="text-xl font-bold text-slate-900">Run Your AI Agent</h3>
+        <p class="text-slate-600 text-sm leading-relaxed">
+          Pass the clean context package directly into your LLM prompt (OpenAI, Claude, LangGraph) and return the response.
+        </p>
+        <div class="p-3 bg-slate-900 rounded-lg text-emerald-400 font-mono text-xs overflow-x-auto">
+          llm.generate(prompt=context)
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</section>

@@ -272,6 +272,15 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		estimatedTokens += len(mem.Content) / 4
 	}
 
+	// Tokens processed sum (everything scanned before truncation)
+	processedTokens := summaryTokens + stateTokens
+	for _, m := range history {
+		processedTokens += len(m.Content) / 4
+	}
+	for _, mem := range matchedMemories {
+		processedTokens += len(mem.Content) / 4
+	}
+
 	pkg := &domain.ContextPackage{
 		RoomID:           roomID,
 		Summary:          state.Summary,
@@ -283,6 +292,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		References:       references,
 		StrategyUsed:     strategy,
 		TokensEstimated:  estimatedTokens,
+		TokensProcessed:  processedTokens,
 	}
 
 	return pkg, nil

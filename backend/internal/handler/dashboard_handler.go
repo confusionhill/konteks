@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/labstack/echo/v4"
@@ -49,12 +50,46 @@ func (h *DashboardHandler) ListRooms(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
 	}
 
-	rooms, err := h.roomUsecase.ListRoomsOverview(c.Request().Context(), tenantID)
+	search := c.QueryParam("search")
+	sortBy := c.QueryParam("sort_by")
+	sortOrder := c.QueryParam("sort_order")
+
+	limitStr := c.QueryParam("limit")
+	limit := 10
+	if limitStr != "" {
+		if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
+			limit = val
+		}
+	}
+
+	pageStr := c.QueryParam("page")
+	page := 1
+	if pageStr != "" {
+		if val, err := strconv.Atoi(pageStr); err == nil && val > 0 {
+			page = val
+		}
+	}
+	offset := (page - 1) * limit
+
+	minMessagesStr := c.QueryParam("min_messages")
+	minMessages := 0
+	if minMessagesStr != "" {
+		if val, err := strconv.Atoi(minMessagesStr); err == nil && val >= 0 {
+			minMessages = val
+		}
+	}
+
+	rooms, total, err := h.roomUsecase.ListRoomsOverview(
+		c.Request().Context(), tenantID, search, sortBy, sortOrder, minMessages, limit, offset,
+	)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(http.StatusOK, rooms)
+	return c.JSON(http.StatusOK, map[string]any{
+		"rooms": rooms,
+		"total": total,
+	})
 }
 
 type roomDetailResponse struct {

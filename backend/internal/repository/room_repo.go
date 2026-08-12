@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
@@ -231,41 +233,112 @@ func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomStat
 	return tx.Commit()
 }
 
-func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string) ([]domain.RoomOverview, error) {
-	query := `
-		SELECT
-			r.id,
-			COALESCE(r.external_user_id, '') AS external_user_id,
-			COALESCE(rs.active_topic, '') AS active_topic,
-			COALESCE(mc.msg_count, 0) AS message_count,
-			COALESCE(uc.total_tokens, 0) AS total_tokens_used,
-			COALESCE(uc.total_cost, 0) AS total_cost,
-			COALESCE(uc.avg_tokens, 0) AS avg_tokens_per_turn,
-			r.updated_at AS last_active_at
-		FROM rooms r
-		LEFT JOIN room_state rs ON rs.room_id = r.id
-		LEFT JOIN (
-			SELECT room_id, COUNT(*) AS msg_count FROM messages GROUP BY room_id
-		) mc ON mc.room_id = r.id
-		LEFT JOIN (
-			SELECT 
-				room_id, 
-				SUM(tokens_used) AS total_tokens, 
-				SUM(cost_total) AS total_cost, 
-				AVG(tokens_used) AS avg_tokens 
-			FROM usage_records 
-			WHERE room_id IS NOT NULL 
-			GROUP BY room_id
-		) uc ON uc.room_id = r.id
-		WHERE r.tenant_id = $1
-		ORDER BY r.updated_at DESC
-		LIMIT 50
-	`
-	var overviews []domain.RoomOverview
-	err := r.db.SelectContext(ctx, &overviews, query, tenantID)
-	if err != nil {
-		return nil, err
+func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, search string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
+	// 1. Build ORDER BY safely to prevent SQL injection
+	allowedSortFields := map[string]string{
+		"id":               "r.id",
+		"external_user_id": "r.external_user_id",
+		"active_topic":     "rs.active_topic",
+		"message_count":    "COALESCE(mc.msg_count, 0)",
+		"total_cost":       "COALESCE(uc.total_cost, 0)",
+		"last_active_at":   "r.updated_at",
 	}
-	return overviews, nil
+
+	orderBy := "r.updated_at"
+	if field, ok := allowedSortFields[sortBy]; ok {
+		orderBy = field
+	}
+
+	dir := "DESC"
+	if strings.ToUpper(sortOrder) == "ASC" {
+		dir = "ASC"
+	}
+
+	// 2. Build where conditions dynamically
+	queryConds := ""
+	args := []any{tenantID}
+	paramIdx := 2
+
+	if search != "" {
+		queryConds += fmt.Sprintf(" AND (id::text ILIKE $%d OR external_user_id ILIKE $%d OR active_topic ILIKE $%d)", paramIdx, paramIdx, paramIdx)
+		args = append(args, "%"+search+"%")
+		paramIdx++
+	}
+
+	if minMessages > 0 {
+		queryConds += fmt.Sprintf(" AND message_count >= $%d", paramIdx)
+		args = append(args, minMessages)
+		paramIdx++
+	}
+
+	// 3. Count total rooms matching filters
+	countQuery := fmt.Sprintf(`
+		WITH room_metrics AS (
+			SELECT
+				r.id,
+				COALESCE(r.external_user_id, '') AS external_user_id,
+				COALESCE(rs.active_topic, '') AS active_topic,
+				COALESCE(mc.msg_count, 0) AS message_count,
+				r.tenant_id
+			FROM rooms r
+			LEFT JOIN room_state rs ON rs.room_id = r.id
+			LEFT JOIN (
+				SELECT room_id, COUNT(*) AS msg_count FROM messages GROUP BY room_id
+			) mc ON mc.room_id = r.id
+		)
+		SELECT COUNT(*) FROM room_metrics WHERE tenant_id = $1 %s
+	`, queryConds)
+
+	var total int
+	err := r.db.GetContext(ctx, &total, countQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 4. Retrieve paginated list
+	selectQuery := fmt.Sprintf(`
+		WITH room_metrics AS (
+			SELECT
+				r.id,
+				COALESCE(r.external_user_id, '') AS external_user_id,
+				COALESCE(rs.active_topic, '') AS active_topic,
+				COALESCE(mc.msg_count, 0) AS message_count,
+				COALESCE(uc.total_tokens, 0) AS total_tokens_used,
+				COALESCE(uc.total_cost, 0) AS total_cost,
+				COALESCE(uc.avg_tokens, 0) AS avg_tokens_per_turn,
+				r.updated_at AS last_active_at,
+				r.tenant_id
+			FROM rooms r
+			LEFT JOIN room_state rs ON rs.room_id = r.id
+			LEFT JOIN (
+				SELECT room_id, COUNT(*) AS msg_count FROM messages GROUP BY room_id
+			) mc ON mc.room_id = r.id
+			LEFT JOIN (
+				SELECT 
+					room_id, 
+					SUM(tokens_used) AS total_tokens, 
+					SUM(cost_total) AS total_cost, 
+					AVG(tokens_used) AS avg_tokens 
+				FROM usage_records 
+				WHERE room_id IS NOT NULL 
+				GROUP BY room_id
+			) uc ON uc.room_id = r.id
+		)
+		SELECT id, external_user_id, active_topic, message_count, total_tokens_used, total_cost, avg_tokens_per_turn, last_active_at
+		FROM room_metrics
+		WHERE tenant_id = $1 %s
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d
+	`, queryConds, orderBy, dir, paramIdx, paramIdx+1)
+
+	args = append(args, limit, offset)
+
+	var overviews []domain.RoomOverview
+	err = r.db.SelectContext(ctx, &overviews, selectQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return overviews, total, nil
 }
 

@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 type Entity struct {
 	Type string `json:"type"`
@@ -33,11 +36,12 @@ type ContextPackage struct {
 	References       map[string]string `json:"references,omitempty"`
 	StrategyUsed     string            `json:"strategy_used,omitempty"`
 	TokensEstimated  int               `json:"tokens_estimated,omitempty"`
+	TokensProcessed  int               `json:"tokens_processed,omitempty"`
 }
 
 type OpenRouterServiceClient interface {
 	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
-	ExtractStateAndSummary(ctx context.Context, history []Message, currentSummary string) (newSummary string, activeTopic string, updatedState string, err error)
+	ExtractStateAndSummary(ctx context.Context, history []Message, currentSummary string, schemaJSON string) (newSummary string, activeTopic string, updatedState string, err error)
 	ResolveReferences(ctx context.Context, history []Message, stateJSON string) (references map[string]string, entities []Entity, err error)
 }
 

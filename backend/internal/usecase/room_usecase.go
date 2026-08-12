@@ -37,6 +37,6 @@ func (u *roomUsecase) DeleteRoom(ctx context.Context, tenantID string, roomID st
 	return u.roomRepo.Delete(ctx, tenantID, roomID)
 }
 
-func (u *roomUsecase) ListRoomsOverview(ctx context.Context, tenantID string) ([]domain.RoomOverview, error) {
-	return u.roomRepo.ListWithOverview(ctx, tenantID)
+func (u *roomUsecase) ListRoomsOverview(ctx context.Context, tenantID string, search string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
+	return u.roomRepo.ListWithOverview(ctx, tenantID, search, sortBy, sortOrder, minMessages, limit, offset)
 }

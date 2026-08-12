@@ -99,7 +99,7 @@ func (r *roomRepository) GetState(ctx context.Context, roomID string) (*domain.R
 		UpdatedAt   string         `db:"updated_at"`
 	}
 	query := `
-		SELECT room_id, summary, active_topic, state, references, entities, updated_at
+		SELECT room_id, summary, active_topic, state, "references", "entities", updated_at
 		FROM room_state
 		WHERE room_id = $1
 	`
@@ -147,14 +147,14 @@ func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomStat
 	}
 
 	queryState := `
-		INSERT INTO room_state (room_id, summary, active_topic, state, references, entities, updated_at)
+		INSERT INTO room_state (room_id, summary, active_topic, state, "references", "entities", updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (room_id) DO UPDATE SET
 			summary = EXCLUDED.summary,
 			active_topic = EXCLUDED.active_topic,
 			state = EXCLUDED.state,
-			references = EXCLUDED.references,
-			entities = EXCLUDED.entities,
+			"references" = EXCLUDED."references",
+			"entities" = EXCLUDED."entities",
 			updated_at = EXCLUDED.updated_at
 	`
 	now := time.Now()

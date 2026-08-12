@@ -19,7 +19,7 @@ func NewRoomRepository(db *sqlx.DB) domain.RoomRepository {
 	return &roomRepository{db: db}
 }
 
-func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUserID string) (*domain.Room, error) {
+func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -29,10 +29,20 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 	// Insert room
 	var room domain.Room
 	queryRoom := `
-		INSERT INTO rooms (tenant_id, external_user_id)
-		VALUES ($1, $2)
+		INSERT INTO rooms (tenant_id, external_user_id, state_schema, default_policy)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy
 	`
+	var schemaParam any = nil
+	if len(stateSchema) > 0 && string(stateSchema) != "null" {
+		schemaParam = string(stateSchema)
+	}
+	var policyParam any = nil
+	if defaultPolicy != nil {
+		pBytes, _ := json.Marshal(defaultPolicy)
+		policyParam = string(pBytes)
+	}
+
 	type rawRoom struct {
 		ID             string         `db:"id"`
 		TenantID       string         `db:"tenant_id"`
@@ -43,7 +53,7 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 		DefaultPolicy  sql.NullString `db:"default_policy"`
 	}
 	var rr rawRoom
-	err = tx.GetContext(ctx, &rr, queryRoom, tenantID, externalUserID)
+	err = tx.GetContext(ctx, &rr, queryRoom, tenantID, externalUserID, schemaParam, policyParam)
 	if err != nil {
 		return nil, err
 	}

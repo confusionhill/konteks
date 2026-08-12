@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/dika/contextkit/backend/internal/domain"
@@ -16,7 +17,9 @@ func NewRoomHandler(roomUsecase domain.RoomUsecase) *RoomHandler {
 }
 
 type createRoomRequest struct {
-	ExternalUserID string `json:"external_user_id"`
+	ExternalUserID string                `json:"external_user_id"`
+	StateSchema    json.RawMessage       `json:"state_schema,omitempty"`
+	DefaultPolicy  *domain.ContextPolicy `json:"default_policy,omitempty"`
 }
 
 func (h *RoomHandler) CreateRoom(c echo.Context) error {
@@ -30,7 +33,7 @@ func (h *RoomHandler) CreateRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
-	room, err := h.roomUsecase.CreateRoom(c.Request().Context(), tenantID, req.ExternalUserID)
+	room, err := h.roomUsecase.CreateRoom(c.Request().Context(), tenantID, req.ExternalUserID, req.StateSchema, req.DefaultPolicy)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

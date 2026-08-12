@@ -26,7 +26,7 @@ type RoomState struct {
 }
 
 type RoomRepository interface {
-	Create(ctx context.Context, tenantID string, externalUserID string) (*Room, error)
+	Create(ctx context.Context, tenantID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy) (*Room, error)
 	GetByID(ctx context.Context, tenantID string, roomID string) (*Room, error)
 	Delete(ctx context.Context, tenantID string, roomID string) error
 	GetState(ctx context.Context, roomID string) (*RoomState, error)
@@ -46,7 +46,7 @@ type RoomOverview struct {
 }
 
 type RoomUsecase interface {
-	CreateRoom(ctx context.Context, tenantID string, externalUserID string) (*Room, error)
+	CreateRoom(ctx context.Context, tenantID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy) (*Room, error)
 	GetRoomState(ctx context.Context, tenantID string, roomID string) (*RoomState, error)
 	DeleteRoom(ctx context.Context, tenantID string, roomID string) error
 	ListRoomsOverview(ctx context.Context, tenantID string) ([]RoomOverview, error)

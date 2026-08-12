@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/dika/contextkit/backend/internal/domain"
@@ -15,8 +16,8 @@ func NewRoomUsecase(roomRepo domain.RoomRepository) domain.RoomUsecase {
 	return &roomUsecase{roomRepo: roomRepo}
 }
 
-func (u *roomUsecase) CreateRoom(ctx context.Context, tenantID string, externalUserID string) (*domain.Room, error) {
-	return u.roomRepo.Create(ctx, tenantID, externalUserID)
+func (u *roomUsecase) CreateRoom(ctx context.Context, tenantID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+	return u.roomRepo.Create(ctx, tenantID, externalUserID, stateSchema, defaultPolicy)
 }
 
 func (u *roomUsecase) GetRoomState(ctx context.Context, tenantID string, roomID string) (*domain.RoomState, error) {

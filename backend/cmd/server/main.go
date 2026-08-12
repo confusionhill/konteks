@@ -88,6 +88,14 @@ func main() {
 		log.Println("room state references migration applied successfully.")
 	}
 
+	migrationFile5 := "db/migrations/000005_room_policy_and_schema.up.sql"
+	log.Printf("applying database migrations from %s...", migrationFile5)
+	if err := runMigrations(db, migrationFile5); err != nil {
+		log.Printf("migrations warning (continuing execution): %v", err)
+	} else {
+		log.Println("room policy and schema migration applied successfully.")
+	}
+
 	// 4. Initialize Core Repositories
 	authRepo := repository.NewAuthRepository(db)
 	roomRepo := repository.NewRoomRepository(db)

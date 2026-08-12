@@ -27,8 +27,6 @@ example/
 .venv/
 venv/
 __pycache__/
-server
-
 # Node / Frontend / Landing
 node_modules/
 landing/node_modules/

@@ -97,19 +97,19 @@ export const OverviewPage: React.FC = () => {
                 label="Total Cost (USD)"
                 value={`$${(summary.total_cost_overall || 0).toFixed(6)}`}
                 icon={<CurrencyDollar size={22} weight="duotone" />}
-                subtext={`In: $${(summary.total_cost_input || 0).toFixed(6)} | Out: $${(summary.total_cost_output || 0).toFixed(6)}`}
+                subtext={`Ops: $${((summary.total_api_calls || 0) * 0.00001).toFixed(6)} | Proc: $${(summary.total_cost_input || 0).toFixed(6)}`}
               />
               <StatCard
-                label="Avg Input Tokens"
+                label="Avg Tokens Processed"
                 value={Math.round(summary.avg_tokens_input || 0)}
                 icon={<ArrowDownLeft size={22} weight="duotone" />}
-                subtext="DeepSeek $0.0679 / 1M"
+                subtext="Scanned & ranked @ $0.07 / 1M"
               />
               <StatCard
-                label="Avg Output Tokens"
+                label="Avg Tokens Delivered"
                 value={Math.round(summary.avg_tokens_output || 0)}
                 icon={<ArrowUpRight size={22} weight="duotone" />}
-                subtext="DeepSeek $0.168 / 1M"
+                subtext="Delivered to Agent (Free)"
               />
             </div>
           </div>

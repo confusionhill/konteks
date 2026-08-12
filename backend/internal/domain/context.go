@@ -12,11 +12,14 @@ type ContextPolicy struct {
 	MaxTokens         int     `json:"max_tokens,omitempty"`
 	MinRelevanceScore float64 `json:"min_relevance_score,omitempty"`
 	Strategy          string  `json:"strategy,omitempty"` // "auto" (default), "recent_heavy", "memory_heavy", "hybrid"
+	MaxHistoryDepth   int     `json:"max_history_depth,omitempty"`
+	FreshnessWeight   float64 `json:"freshness_weight,omitempty"`
 }
 
 type GetContextRequest struct {
-	Query  string        `json:"query"`
-	Policy ContextPolicy `json:"policy"`
+	Query         string          `json:"query"`
+	Policy        ContextPolicy   `json:"policy"`
+	DynamicSchema json.RawMessage `json:"dynamic_schema,omitempty"`
 }
 
 type ContextPackage struct {

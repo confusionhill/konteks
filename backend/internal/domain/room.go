@@ -9,8 +9,10 @@ type Room struct {
 	ID             string `db:"id" json:"id"`
 	TenantID       string `db:"tenant_id" json:"tenant_id"`
 	ExternalUserID string `db:"external_user_id" json:"external_user_id"`
-	CreatedAt      string `db:"created_at" json:"created_at"`
-	UpdatedAt      string `db:"updated_at" json:"updated_at"`
+	CreatedAt      string          `db:"created_at" json:"created_at"`
+	UpdatedAt      string          `db:"updated_at" json:"updated_at"`
+	StateSchema    json.RawMessage `db:"state_schema" json:"state_schema,omitempty"`
+	DefaultPolicy  *ContextPolicy  `db:"default_policy" json:"default_policy,omitempty"`
 }
 
 type RoomState struct {

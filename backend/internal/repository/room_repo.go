@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -88,20 +89,45 @@ func (r *roomRepository) Delete(ctx context.Context, tenantID string, roomID str
 }
 
 func (r *roomRepository) GetState(ctx context.Context, roomID string) (*domain.RoomState, error) {
+	type rawRoomState struct {
+		RoomID      string         `db:"room_id"`
+		Summary     string         `db:"summary"`
+		ActiveTopic string         `db:"active_topic"`
+		State       sql.NullString `db:"state"`
+		References  sql.NullString `db:"references"`
+		Entities    sql.NullString `db:"entities"`
+		UpdatedAt   string         `db:"updated_at"`
+	}
 	query := `
-		SELECT room_id, summary, active_topic, state, updated_at
+		SELECT room_id, summary, active_topic, state, references, entities, updated_at
 		FROM room_state
 		WHERE room_id = $1
 	`
-	var state domain.RoomState
-	err := r.db.GetContext(ctx, &state, query, roomID)
+	var raw rawRoomState
+	err := r.db.GetContext(ctx, &raw, query, roomID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found
 		}
 		return nil, err
 	}
-	return &state, nil
+
+	state := &domain.RoomState{
+		RoomID:      raw.RoomID,
+		Summary:     raw.Summary,
+		ActiveTopic: raw.ActiveTopic,
+		State:       []byte(raw.State.String),
+		UpdatedAt:   raw.UpdatedAt,
+	}
+
+	if raw.References.Valid && raw.References.String != "" {
+		_ = json.Unmarshal([]byte(raw.References.String), &state.References)
+	}
+	if raw.Entities.Valid && raw.Entities.String != "" {
+		_ = json.Unmarshal([]byte(raw.Entities.String), &state.Entities)
+	}
+
+	return state, nil
 }
 
 func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomState) error {
@@ -111,17 +137,28 @@ func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomStat
 	}
 	defer tx.Rollback()
 
+	refBytes, _ := json.Marshal(state.References)
+	if state.References == nil {
+		refBytes = []byte("{}")
+	}
+	entBytes, _ := json.Marshal(state.Entities)
+	if state.Entities == nil {
+		entBytes = []byte("[]")
+	}
+
 	queryState := `
-		INSERT INTO room_state (room_id, summary, active_topic, state, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO room_state (room_id, summary, active_topic, state, references, entities, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (room_id) DO UPDATE SET
 			summary = EXCLUDED.summary,
 			active_topic = EXCLUDED.active_topic,
 			state = EXCLUDED.state,
+			references = EXCLUDED.references,
+			entities = EXCLUDED.entities,
 			updated_at = EXCLUDED.updated_at
 	`
 	now := time.Now()
-	_, err = tx.ExecContext(ctx, queryState, state.RoomID, state.Summary, state.ActiveTopic, state.State, now)
+	_, err = tx.ExecContext(ctx, queryState, state.RoomID, state.Summary, state.ActiveTopic, state.State, string(refBytes), string(entBytes), now)
 	if err != nil {
 		return err
 	}

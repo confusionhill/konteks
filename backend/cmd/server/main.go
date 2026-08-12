@@ -80,6 +80,14 @@ func main() {
 		log.Println("token & cost tracking migration applied successfully.")
 	}
 
+	migrationFile4 := "db/migrations/000004_room_state_references.up.sql"
+	log.Printf("applying database migrations from %s...", migrationFile4)
+	if err := runMigrations(db, migrationFile4); err != nil {
+		log.Printf("migrations warning (continuing execution): %v", err)
+	} else {
+		log.Println("room state references migration applied successfully.")
+	}
+
 	// 4. Initialize Core Repositories
 	authRepo := repository.NewAuthRepository(db)
 	roomRepo := repository.NewRoomRepository(db)

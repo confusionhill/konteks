@@ -14,11 +14,13 @@ type Room struct {
 }
 
 type RoomState struct {
-	RoomID      string          `db:"room_id" json:"room_id"`
-	Summary     string          `db:"summary" json:"summary"`
-	ActiveTopic string          `db:"active_topic" json:"active_topic"`
-	State       json.RawMessage `db:"state" json:"state"`
-	UpdatedAt   string          `db:"updated_at" json:"updated_at"`
+	RoomID      string            `db:"room_id" json:"room_id"`
+	Summary     string            `db:"summary" json:"summary"`
+	ActiveTopic string            `db:"active_topic" json:"active_topic"`
+	State       json.RawMessage   `db:"state" json:"state"`
+	References  map[string]string `json:"references,omitempty"`
+	Entities    []Entity          `json:"entities,omitempty"`
+	UpdatedAt   string            `db:"updated_at" json:"updated_at"`
 }
 
 type RoomRepository interface {

@@ -148,6 +148,11 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 			log.Printf("[Reference Resolution Warning]: %v", errRef)
 			references = make(map[string]string)
 			entities = []domain.Entity{}
+		} else {
+			// Persist resolved references & entities to DB so Dashboard can read them with 0 LLM cost
+			state.References = references
+			state.Entities = entities
+			_ = u.roomRepo.UpsertState(ctx, state)
 		}
 	}
 

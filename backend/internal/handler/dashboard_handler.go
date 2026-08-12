@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/dika/contextkit/backend/internal/domain"
@@ -59,7 +60,7 @@ func (h *DashboardHandler) ListRooms(c echo.Context) error {
 type roomDetailResponse struct {
 	Room     *domain.Room        `json:"room"`
 	Metrics  *domain.RoomMetrics `json:"metrics"`
-	State    *domain.RoomState   `json:"state"`
+	State    any                 `json:"state"`
 	Messages []domain.Message    `json:"messages"`
 }
 
@@ -97,10 +98,29 @@ func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
 		metrics = &domain.RoomMetrics{}
 	}
 
+	// Clean zero-cost read-only state response directly from PostgreSQL DB
+	var stateResp any
+	if state != nil {
+		var parsedState any
+		if err := json.Unmarshal(state.State, &parsedState); err != nil {
+			parsedState = make(map[string]any)
+		}
+
+		stateResp = map[string]interface{}{
+			"room_id":      state.RoomID,
+			"summary":      state.Summary,
+			"active_topic": state.ActiveTopic,
+			"state":        parsedState,
+			"updated_at":   state.UpdatedAt,
+			"references":   state.References,
+			"entities":     state.Entities,
+		}
+	}
+
 	return c.JSON(http.StatusOK, roomDetailResponse{
 		Room:     room,
 		Metrics:  metrics,
-		State:    state,
+		State:    stateResp,
 		Messages: messages,
 	})
 }

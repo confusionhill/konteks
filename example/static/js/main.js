@@ -586,20 +586,14 @@ function setGenerating(isGen) {
         el.typingIndicator.style.display = 'none';
         el.userInput.disabled = false;
         el.sendBtn.disabled = false;
-        el.userInput.focus();
+        el.userInput.focus({ preventScroll: true });
     }
 }
 
 // Helpers
 function scrollToBottom() {
     if (el.messagesContainer) {
-        setTimeout(() => {
-            el.messagesContainer.scrollTo({
-                top: el.messagesContainer.scrollHeight,
-                behavior: 'smooth'
-            });
-            window.scrollTo(0, 0);
-        }, 50);
+        el.messagesContainer.scrollTop = el.messagesContainer.scrollHeight;
     }
 }
 

@@ -15,11 +15,6 @@ func NewContextHandler(contextUsecase domain.ContextUsecase) *ContextHandler {
 	return &ContextHandler{contextUsecase: contextUsecase}
 }
 
-type getContextRequest struct {
-	Query     string `json:"query"`
-	MaxTokens int    `json:"max_tokens"`
-}
-
 func (h *ContextHandler) GetContextPackage(c echo.Context) error {
 	tenantID, ok := c.Get("tenant_id").(string)
 	if !ok {
@@ -31,15 +26,11 @@ func (h *ContextHandler) GetContextPackage(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id parameter"})
 	}
 
-	var req getContextRequest
+	var req domain.GetContextRequest
 	// For context fetch, body is optional. Bind if provided
 	_ = c.Bind(&req)
 
-	if req.MaxTokens <= 0 {
-		req.MaxTokens = 4000 // Default token budget
-	}
-
-	pkg, err := h.contextUsecase.GetContextPackage(c.Request().Context(), tenantID, roomID, req.Query, req.MaxTokens)
+	pkg, err := h.contextUsecase.GetContextPackage(c.Request().Context(), tenantID, roomID, req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

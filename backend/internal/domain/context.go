@@ -8,6 +8,17 @@ type Entity struct {
 	Name string `json:"name,omitempty"`
 }
 
+type ContextPolicy struct {
+	MaxTokens         int     `json:"max_tokens,omitempty"`
+	MinRelevanceScore float64 `json:"min_relevance_score,omitempty"`
+	Strategy          string  `json:"strategy,omitempty"` // "auto" (default), "recent_heavy", "memory_heavy", "hybrid"
+}
+
+type GetContextRequest struct {
+	Query  string        `json:"query"`
+	Policy ContextPolicy `json:"policy"`
+}
+
 type ContextPackage struct {
 	RoomID           string            `json:"room_id"`
 	Summary          string            `json:"summary"`
@@ -17,13 +28,16 @@ type ContextPackage struct {
 	Memories         []Memory          `json:"memories"`
 	Entities         []Entity          `json:"entities"`
 	References       map[string]string `json:"references,omitempty"`
+	StrategyUsed     string            `json:"strategy_used,omitempty"`
+	TokensEstimated  int               `json:"tokens_estimated,omitempty"`
 }
 
 type OpenRouterServiceClient interface {
 	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
 	ExtractStateAndSummary(ctx context.Context, history []Message, currentSummary string) (newSummary string, activeTopic string, updatedState string, err error)
+	ResolveReferences(ctx context.Context, history []Message, stateJSON string) (references map[string]string, entities []Entity, err error)
 }
 
 type ContextUsecase interface {
-	GetContextPackage(ctx context.Context, tenantID string, roomID string, query string, maxTokens int) (*ContextPackage, error)
+	GetContextPackage(ctx context.Context, tenantID string, roomID string, req GetContextRequest) (*ContextPackage, error)
 }

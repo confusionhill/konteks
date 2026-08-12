@@ -93,7 +93,7 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
 			FROM memories
 			WHERE room_id = $1 OR external_user_id = $2
-			ORDER BY embedding <=> $3::vector
+			ORDER BY (0.7 * (1 - (embedding <=> $3::vector)) + 0.3 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
 			LIMIT $4
 		`
 		args = []any{roomID, *externalUserID, embeddingStr, limit}
@@ -102,7 +102,7 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
 			FROM memories
 			WHERE room_id = $1
-			ORDER BY embedding <=> $2::vector
+			ORDER BY (0.7 * (1 - (embedding <=> $2::vector)) + 0.3 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
 			LIMIT $3
 		`
 		args = []any{roomID, embeddingStr, limit}

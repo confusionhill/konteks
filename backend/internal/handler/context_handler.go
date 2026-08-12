@@ -36,7 +36,8 @@ func (h *ContextHandler) GetContextPackage(c echo.Context) error {
 	}
 
 	if pkg != nil {
-		c.Set("tokens_input", pkg.TokensEstimated)
+		c.Set("tokens_input", pkg.TokensProcessed)
+		c.Set("tokens_output", pkg.TokensEstimated)
 	}
 
 	return c.JSON(http.StatusOK, pkg)

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dika/contextkit/backend/internal/domain"
 )
 
@@ -276,67 +278,122 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		history = []domain.Message{}
 	}
 
-	// 6. Dynamic schema extraction override on-the-fly
-	if len(req.DynamicSchema) > 0 && string(req.DynamicSchema) != "null" && string(req.DynamicSchema) != "{}" {
-		log.Printf("[Context Engine]: dynamic schema provided. Performing on-the-fly state extraction...")
-		newSummary, activeTopic, extractedState, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(req.DynamicSchema))
-		if errExtract != nil {
-			log.Printf("[Context Engine State Extraction Error]: %v", errExtract)
-		} else {
+	// 6-8. Execute LLM dependencies (Extraction, Embeddings, Pronouns)
+	var matchedMemories []domain.Memory
+	references := make(map[string]string)
+	entities := []domain.Entity{}
+
+	if !policy.FastMode {
+		var g errgroup.Group
+
+		var extractSuccess bool
+		var newSummary, activeTopic string
+		var extractedState []byte
+
+		// 6. Dynamic schema extraction override on-the-fly
+		if len(req.DynamicSchema) > 0 && string(req.DynamicSchema) != "null" && string(req.DynamicSchema) != "{}" {
+			g.Go(func() error {
+				log.Printf("[Context Engine]: dynamic schema provided. Performing on-the-fly state extraction...")
+				sum, topic, extState, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(req.DynamicSchema))
+				if errExtract != nil {
+					log.Printf("[Context Engine State Extraction Error]: %v", errExtract)
+				} else {
+					newSummary = sum
+					activeTopic = topic
+					extractedState = []byte(extState)
+					extractSuccess = true
+				}
+				return nil
+			})
+		}
+
+		// 7. Search semantic memories
+		if req.Query != "" {
+			g.Go(func() error {
+				embedding, errEmbedding := u.openRouterClient.GenerateEmbedding(ctx, req.Query)
+				if errEmbedding != nil {
+					log.Printf("[Context Query Embedding Error]: %v", errEmbedding)
+				} else {
+					var extUserID *string
+					if room.ExternalUserID != "" {
+						extUserID = &room.ExternalUserID
+					}
+					var errSearch error
+					memSearch, errSearch := u.memoryRepo.SearchSemantic(ctx, roomID, extUserID, embedding, policy.FreshnessWeight, memLimit)
+					if errSearch != nil {
+						log.Printf("[Context Memory Search Error]: %v", errSearch)
+					} else {
+						matchedMemories = memSearch
+					}
+				}
+				return nil
+			})
+		}
+
+		// 8. Smart-Sync Reference Resolution (Pronoun check)
+		var refSuccess bool
+		var resolvedRefs map[string]string
+		var resolvedEnts []domain.Entity
+
+		if len(history) > 0 && hasPronouns(req.Query) {
+			currentStateStr := string(state.State)
+			g.Go(func() error {
+				log.Printf("[Context Engine]: Pronoun detected in query. Resolving references...")
+				refs, ents, errRef := u.openRouterClient.ResolveReferences(ctx, history, currentStateStr)
+				if errRef != nil {
+					log.Printf("[Reference Resolution Warning]: %v", errRef)
+				} else {
+					resolvedRefs = refs
+					resolvedEnts = ents
+					refSuccess = true
+				}
+				return nil
+			})
+		} else if len(history) > 0 {
+			references = state.References
+			entities = state.Entities
+			if references == nil {
+				references = make(map[string]string)
+			}
+		}
+
+		// Wait for all concurrent LLM calls to finish
+		_ = g.Wait()
+
+		// Apply concurrent results safely
+		needsSave := false
+		if extractSuccess {
 			state.Summary = newSummary
 			state.ActiveTopic = activeTopic
 			state.State = json.RawMessage(extractedState)
+			needsSave = true
+		}
+		if refSuccess {
+			references = resolvedRefs
+			entities = resolvedEnts
+			state.References = references
+			state.Entities = entities
+			needsSave = true
+		}
+
+		if needsSave {
+			_ = u.roomRepo.UpsertState(ctx, state)
+		}
+
+	} else {
+		log.Printf("[Context Engine]: FastMode enabled. Bypassing synchronous LLM calls.")
+		if len(history) > 0 {
+			references = state.References
+			entities = state.Entities
+			if references == nil {
+				references = make(map[string]string)
+			}
 		}
 	}
 
 	var parsedState any
 	if err := json.Unmarshal(state.State, &parsedState); err != nil {
 		parsedState = make(map[string]any)
-	}
-
-	// 7. Search semantic memories
-	var matchedMemories []domain.Memory
-	if req.Query != "" {
-		embedding, errEmbedding := u.openRouterClient.GenerateEmbedding(ctx, req.Query)
-		if errEmbedding != nil {
-			log.Printf("[Context Query Embedding Error]: %v", errEmbedding)
-		} else {
-			var extUserID *string
-			if room.ExternalUserID != "" {
-				extUserID = &room.ExternalUserID
-			}
-			var errSearch error
-			matchedMemories, errSearch = u.memoryRepo.SearchSemantic(ctx, roomID, extUserID, embedding, policy.FreshnessWeight, memLimit)
-			if errSearch != nil {
-				log.Printf("[Context Memory Search Error]: %v", errSearch)
-			}
-		}
-	}
-
-	// 8. Smart-Sync Reference Resolution (Pronoun check)
-	references := make(map[string]string)
-	entities := []domain.Entity{}
-	if len(history) > 0 && hasPronouns(req.Query) {
-		log.Printf("[Context Engine]: Pronoun detected in query. Resolving references...")
-		var errRef error
-		references, entities, errRef = u.openRouterClient.ResolveReferences(ctx, history, string(state.State))
-		if errRef != nil {
-			log.Printf("[Reference Resolution Warning]: %v", errRef)
-			references = make(map[string]string)
-			entities = []domain.Entity{}
-		} else {
-			// Persist resolved references & entities
-			state.References = references
-			state.Entities = entities
-			_ = u.roomRepo.UpsertState(ctx, state)
-		}
-	} else if len(history) > 0 {
-		// Use cached references if any
-		references = state.References
-		entities = state.Entities
-		if references == nil {
-			references = make(map[string]string)
-		}
 	}
 
 	// 9. Greedy Token Packing

@@ -17,6 +17,7 @@ type ContextPolicy struct {
 	Strategy          string  `json:"strategy,omitempty"` // "auto" (default), "recent_heavy", "memory_heavy", "hybrid"
 	MaxHistoryDepth   int     `json:"max_history_depth,omitempty"`
 	FreshnessWeight   float64 `json:"freshness_weight,omitempty"`
+	FastMode          bool    `json:"fast_mode,omitempty"`
 }
 
 type GetContextRequest struct {

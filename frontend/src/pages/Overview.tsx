@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { fetchSummary, fetchRooms } from '../api/dashboard';
-import type { UsageSummary, RoomOverview } from '../api/dashboard';
+import { fetchSummary, fetchRooms, fetchEvaluationSummary } from '../api/dashboard';
+import type { UsageSummary, RoomOverview, EvaluationSummary } from '../api/dashboard';
 import { StatCard } from '../components/StatCard';
 import { RoomTable } from '../components/RoomTable';
 import { StatCardSkeleton, TableSkeleton } from '../components/Skeleton';
@@ -9,6 +9,7 @@ import { Door, ChatCircleText, HardDrive, Lightning, Warning, CurrencyDollar, Ar
 
 export const OverviewPage: React.FC = () => {
   const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [evalSummary, setEvalSummary] = useState<EvaluationSummary | null>(null);
   const [rooms, setRooms] = useState<RoomOverview[]>([]);
   const [totalRooms, setTotalRooms] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -29,13 +30,15 @@ export const OverviewPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        const [sumData, roomsResp] = await Promise.all([
+        const [sumData, roomsResp, evalSumData] = await Promise.all([
           fetchSummary(),
-          fetchRooms({ search, status, sortBy, sortOrder, page, limit, minMessages })
+          fetchRooms({ search, status, sortBy, sortOrder, page, limit, minMessages }),
+          fetchEvaluationSummary().catch(e => { console.error("Eval summary not available:", e); return null; })
         ]);
         setSummary(sumData);
         setRooms(roomsResp.rooms);
         setTotalRooms(roomsResp.total);
+        if (evalSumData) setEvalSummary(evalSumData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
       } finally {
@@ -144,6 +147,30 @@ export const OverviewPage: React.FC = () => {
                 subtext="Delivered to Agent (Free)"
               />
             </div>
+            
+            {/* Context Observability Row */}
+            {evalSummary && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <StatCard
+                  label="Avg Relevance"
+                  value={evalSummary.avg_relevance > 0 ? `${(evalSummary.avg_relevance * 100).toFixed(1)}%` : "N/A"}
+                  icon={<Lightning size={22} weight="duotone" className="text-amber-500" />}
+                  subtext={`${evalSummary.total_evaluations} evaluations`}
+                />
+                <StatCard
+                  label="Avg Completeness"
+                  value={evalSummary.avg_completeness > 0 ? `${(evalSummary.avg_completeness * 100).toFixed(1)}%` : "N/A"}
+                  icon={<ChatCircleText size={22} weight="duotone" className="text-emerald-500" />}
+                  subtext="Context fullness"
+                />
+                <StatCard
+                  label="Token Efficiency"
+                  value={evalSummary.avg_token_efficiency > 0 ? `${(evalSummary.avg_token_efficiency * 100).toFixed(1)}%` : "N/A"}
+                  icon={<HardDrive size={22} weight="duotone" className="text-blue-500" />}
+                  subtext="Signal vs Noise"
+                />
+              </div>
+            )}
           </div>
         )
       )}

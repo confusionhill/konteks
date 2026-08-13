@@ -1,16 +1,128 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { fetchRoomDetail, fetchMessages, getArchiveDownloadUrl } from '../api/dashboard';
-import type { RoomDetail, Message } from '../api/dashboard';
+import { fetchRoomDetail, fetchMessages, getArchiveDownloadUrl, fetchRoomEvaluations } from '../api/dashboard';
+import type { RoomDetail, Message, ContextEvaluation } from '../api/dashboard';
 import { StatePanel } from '../components/StatePanel';
 import { MessageList } from '../components/MessageList';
 import { DetailSkeleton } from '../components/Skeleton';
 import { ArrowLeft, User, Calendar, Warning, CurrencyDollar, Coins, Lightning, DownloadSimple, Archive } from '@phosphor-icons/react';
 
+// ---- Snapshot Viewer Component ----
+interface SnapshotSection {
+  label: string;
+  count?: number;
+  children: React.ReactNode;
+}
+
+const SnapshotSection: React.FC<SnapshotSection> = ({ label, count, children }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-slate-200 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2 bg-slate-100 hover:bg-slate-200 transition-colors text-left"
+      >
+        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+          {label}{count !== undefined ? ` (${count})` : ''}
+        </span>
+        <span className={`text-slate-400 transition-transform text-xs ${open ? 'rotate-90' : ''}`}>▶</span>
+      </button>
+      {open && (
+        <div className="p-3 bg-white text-xs font-mono text-slate-700 leading-relaxed overflow-x-auto">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ContextSnapshotViewer: React.FC<{ snapshot: any }> = ({ snapshot }) => {
+  if (!snapshot) return <p className="text-xs text-slate-400 italic">No snapshot data</p>;
+  const s = snapshot;
+  return (
+    <div className="space-y-2 mt-3">
+      {/* Inline fields */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        {s.summary && (
+          <div className="col-span-2 bg-slate-50 border border-slate-200 rounded-lg p-2">
+            <span className="font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Summary</span>
+            <p className="text-slate-700">{s.summary}</p>
+          </div>
+        )}
+        {s.active_topic && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+            <span className="font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Active Topic</span>
+            <p className="text-slate-700">{s.active_topic}</p>
+          </div>
+        )}
+        {s.strategy_used && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+            <span className="font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Strategy</span>
+            <p className="text-slate-700">{s.strategy_used}</p>
+          </div>
+        )}
+      </div>
+
+      {/* State */}
+      {s.state && Object.keys(s.state).length > 0 && (
+        <SnapshotSection label="State Variables" count={Object.keys(s.state).length}>
+          <pre>{JSON.stringify(s.state, null, 2)}</pre>
+        </SnapshotSection>
+      )}
+
+      {/* Relevant Messages */}
+      {s.relevant_messages && s.relevant_messages.length > 0 && (
+        <SnapshotSection label="Relevant Messages" count={s.relevant_messages.length}>
+          <div className="space-y-2">
+            {s.relevant_messages.map((m: any, i: number) => (
+              <div key={i} className={`p-2 rounded ${m.role === 'user' ? 'bg-blue-50' : 'bg-slate-50'}`}>
+                <span className="font-bold text-slate-500">{m.role}: </span>
+                <span className="text-slate-700">{m.content}</span>
+              </div>
+            ))}
+          </div>
+        </SnapshotSection>
+      )}
+
+      {/* Memories */}
+      {s.memories && s.memories.length > 0 && (
+        <SnapshotSection label="Memories" count={s.memories.length}>
+          <div className="space-y-2">
+            {s.memories.map((m: any, i: number) => (
+              <div key={i} className="p-2 rounded bg-amber-50 border border-amber-100">
+                <p className="text-slate-700">{m.content}</p>
+                {m.metadata && m.metadata !== '{}' && (
+                  <p className="text-slate-400 mt-1 text-[10px]">{m.metadata}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </SnapshotSection>
+      )}
+
+      {/* Entities */}
+      {s.entities && s.entities.length > 0 && (
+        <SnapshotSection label="Entities" count={s.entities.length}>
+          <pre>{JSON.stringify(s.entities, null, 2)}</pre>
+        </SnapshotSection>
+      )}
+
+      {/* References */}
+      {s.references && Object.keys(s.references).length > 0 && (
+        <SnapshotSection label="References" count={Object.keys(s.references).length}>
+          <pre>{JSON.stringify(s.references, null, 2)}</pre>
+        </SnapshotSection>
+      )}
+    </div>
+  );
+};
+// ---- End Snapshot Viewer ----
+
 export const RoomDetailPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const [detail, setDetail] = useState<RoomDetail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [evaluations, setEvaluations] = useState<ContextEvaluation[]>([]);
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -23,9 +135,13 @@ export const RoomDetailPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchRoomDetail(roomId);
+        const [data, evalsResp] = await Promise.all([
+          fetchRoomDetail(roomId),
+          fetchRoomEvaluations(roomId).catch(e => { console.error("Evals not available", e); return { evaluations: [] }; })
+        ]);
         setDetail(data);
         setMessages(data.messages || []);
+        setEvaluations(evalsResp.evaluations || []);
         // The default server-side list returns up to 50 messages on detail page.
         // If it returns exactly 50, there might be more to paginate.
         setHasMore(data.messages ? data.messages.length >= 50 : false);
@@ -212,6 +328,70 @@ export const RoomDetailPage: React.FC = () => {
             )}
           </div>
         )
+      )}
+
+      {/* Evaluations Log */}
+      {!loading && detail && evaluations.length > 0 && (
+        <div className="mt-8 bg-surface rounded-xl border border-slate-100 shadow-soft p-6">
+          <h2 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">Context Evaluations Log</h2>
+          <p className="text-sm text-slate-500 mb-4">
+            Out-of-band context evaluations measured dynamically.
+          </p>
+
+          {/* Metric Legend for Onboarding */}
+          <div className="mb-6 text-xs text-slate-600 bg-slate-50 p-4 rounded-lg border border-slate-100 leading-relaxed">
+            <span className="font-bold text-slate-700 block mb-1">💡 Context Metrics Explanation:</span>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Relevance:</strong> Does the context contain the appropriate historical background, state, or entities needed to interpret/answer the query? (Defaults to 100% for brand-new topics).</li>
+              <li><strong>Completeness:</strong> Are we missing any critical history or state variables discussed previously that are needed for this query? (Defaults to 100% for brand-new topics).</li>
+              <li><strong>Token Efficiency:</strong> Is the retrieved context concise and high-signal, avoiding bloated or redundant variables? (100% means zero fluff).</li>
+            </ul>
+          </div>
+
+          <div className="space-y-4">
+            {evaluations.map((ev) => (
+              <div key={ev.id} className="border border-slate-100 rounded-lg p-5 bg-slate-50/50">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-slate-500">{new Date(ev.created_at).toLocaleString()}</span>
+                    {ev.is_new_topic && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary-50 text-primary-700 border border-primary-100">
+                        Topic Shift (New)
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2 text-[11px] font-bold uppercase tracking-wider">
+                    <span className={`px-2 py-1 rounded ${ev.relevance_score >= 0.8 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      Relevance: {(ev.relevance_score * 100).toFixed(0)}%
+                    </span>
+                    <span className={`px-2 py-1 rounded ${ev.completeness_score >= 0.8 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      Completeness: {(ev.completeness_score * 100).toFixed(0)}%
+                    </span>
+                    <span className={`px-2 py-1 rounded ${ev.token_efficiency_score >= 0.8 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      Efficiency: {(ev.token_efficiency_score * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Query</span>
+                  <p className="text-sm font-medium text-slate-900 bg-white p-3 border border-slate-200 rounded-lg">{ev.query}</p>
+                </div>
+                <div className="mb-4">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Reasoning</span>
+                  <p className="text-sm text-slate-700 bg-white p-3 border border-slate-200 rounded-lg italic leading-relaxed">{ev.reasoning}</p>
+                </div>
+                
+                <details className="text-sm group">
+                  <summary className="cursor-pointer font-semibold text-primary-600 hover:text-primary-700 list-none flex items-center gap-2">
+                    <span className="group-open:rotate-90 transition-transform text-slate-400">▶</span>
+                    View Measured Context Snapshot
+                  </summary>
+                  <ContextSnapshotViewer snapshot={ev.context_snapshot} />
+                </details>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

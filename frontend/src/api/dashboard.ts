@@ -14,6 +14,26 @@ export interface UsageSummary {
   total_cost_overall: number;
 }
 
+export interface EvaluationSummary {
+  avg_relevance: number;
+  avg_completeness: number;
+  avg_token_efficiency: number;
+  total_evaluations: number;
+}
+
+export interface ContextEvaluation {
+  id: string;
+  room_id: string;
+  query: string;
+  context_snapshot: any;
+  relevance_score: number;
+  completeness_score: number;
+  token_efficiency_score: number;
+  reasoning: string;
+  is_new_topic: boolean;
+  created_at: string;
+}
+
 export interface RoomOverview {
   id: string;
   external_user_id: string;
@@ -152,6 +172,22 @@ export async function getArchiveDownloadUrl(roomId: string): Promise<{ url: stri
   const res = await fetch(`/v1/dashboard/rooms/${roomId}/archive-url`, { headers: getAuthHeaders() });
   if (!res.ok) {
     throw new Error(`Failed to generate archive download URL: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchEvaluationSummary(): Promise<EvaluationSummary> {
+  const res = await fetch('/v1/evaluations/summary', { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch evaluation summary: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchRoomEvaluations(roomId: string): Promise<{ evaluations: ContextEvaluation[] }> {
+  const res = await fetch(`/v1/rooms/${roomId}/evaluations`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch room evaluations: ${res.statusText}`);
   }
   return res.json();
 }

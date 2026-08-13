@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 type Entity struct {
@@ -32,7 +33,7 @@ type ContextPackage struct {
 	ActiveTopic      string            `json:"active_topic"`
 	State            any               `json:"state"`
 	RelevantMessages []Message         `json:"relevant_messages"`
-	Memories         []Memory          `json:"memories"`
+	Memories         []Memory          `json:"memories,omitempty"`
 	Entities         []Entity          `json:"entities"`
 	References       map[string]string `json:"references,omitempty"`
 	StrategyUsed     string            `json:"strategy_used,omitempty"`
@@ -44,6 +45,33 @@ type OpenRouterServiceClient interface {
 	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
 	ExtractStateAndSummary(ctx context.Context, history []Message, currentSummary string, schemaJSON string) (newSummary string, activeTopic string, updatedState string, err error)
 	ResolveReferences(ctx context.Context, history []Message, stateJSON string) (references map[string]string, entities []Entity, err error)
+	EvaluateContext(ctx context.Context, query string, contextPkg *ContextPackage) (*ContextEvaluation, error)
+}
+
+type ContextEvaluation struct {
+	ID                   string          `json:"id"`
+	RoomID               string          `json:"room_id"`
+	Query                string          `json:"query"`
+	ContextSnapshot      json.RawMessage `json:"context_snapshot"`
+	RelevanceScore       float64         `json:"relevance_score"`
+	CompletenessScore    float64         `json:"completeness_score"`
+	TokenEfficiencyScore float64         `json:"token_efficiency_score"`
+	Reasoning            string          `json:"reasoning"`
+	IsNewTopic           bool            `json:"is_new_topic"`
+	CreatedAt            time.Time       `json:"created_at"`
+}
+
+type EvaluationSummary struct {
+	AvgRelevance       float64 `json:"avg_relevance"`
+	AvgCompleteness    float64 `json:"avg_completeness"`
+	AvgTokenEfficiency float64 `json:"avg_token_efficiency"`
+	TotalEvaluations   int     `json:"total_evaluations"`
+}
+
+type EvaluationRepository interface {
+	Create(ctx context.Context, eval *ContextEvaluation) error
+	GetByRoomID(ctx context.Context, roomID string) ([]ContextEvaluation, error)
+	GetSummary(ctx context.Context) (*EvaluationSummary, error)
 }
 
 type ContextUsecase interface {

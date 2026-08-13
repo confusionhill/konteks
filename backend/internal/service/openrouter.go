@@ -136,7 +136,7 @@ Guidelines:
 	}
 
 	reqBody := chatCompletionRequest{
-		Model: s.cfg.OpenRouterChatModel,
+		Model: s.cfg.OpenRouterReasoningModel,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: histBuilder.String()},
@@ -223,7 +223,7 @@ Output ONLY a valid JSON object matching this schema:
 	}
 
 	reqBody := chatCompletionRequest{
-		Model: s.cfg.OpenRouterChatModel,
+		Model: s.cfg.OpenRouterReasoningModel,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: histBuilder.String()},
@@ -281,5 +281,103 @@ Output ONLY a valid JSON object matching this schema:
 	}
 
 	return refRes.References, refRes.Entities, nil
+}
+
+func (s *openRouterServiceClient) EvaluateContext(ctx context.Context, query string, contextPkg *domain.ContextPackage) (*domain.ContextEvaluation, error) {
+	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(s.cfg.OpenRouterBaseURL, "/"))
+
+	systemPrompt := `You are a Context Quality Evaluator for an AI agent infrastructure system.
+Your job is to evaluate the provided "Context Package" against the user's latest "Query".
+
+Assess if the user's query represents a "New Topic Shift" (i.e. the user is asking about something completely unrelated to the past history and state variables stored in the Context Package, such as asking about Hanoi hotels when the past context was about Tokyo). If it is a new topic:
+- set "is_new_topic" to true.
+- "relevance_score" and "completeness_score" should be 1.0 (since no prior context exists to retrieve, the system did not fail).
+
+Otherwise:
+- set "is_new_topic" to false.
+- evaluate relevance and completeness normally.
+
+Definitions for the dimensions (scale from 0.0 to 1.0):
+1. relevance_score: Does the context contain the appropriate historical background, state, or entities needed to interpret/answer the query? If it's a new topic, default to 1.0.
+2. completeness_score: Does the context contain ALL necessary historical references, active topics, or state variables previously discussed that are needed for this query? If it's a new topic, default to 1.0.
+3. token_efficiency_score: Is the context concise and focused, or does it contain a lot of bloated/irrelevant information? (1.0 = highly efficient, no fluff. 0.0 = completely bloated with unrelated history/state).
+
+Output ONLY a valid JSON object matching this schema:
+{
+  "relevance_score": 0.9,
+  "completeness_score": 0.8,
+  "token_efficiency_score": 0.95,
+  "reasoning": "Brief explanation of the scores.",
+  "is_new_topic": false
+}`
+
+	// Prepare a cleaned context package for the LLM and snapshot (strip embeddings to save token costs, but retain memory content for accurate evaluation)
+	evalPkg := *contextPkg
+	if len(evalPkg.Memories) > 0 {
+		cleanedMem := make([]domain.Memory, len(evalPkg.Memories))
+		for i, m := range evalPkg.Memories {
+			c := m
+			c.Embedding = nil
+			cleanedMem[i] = c
+		}
+		evalPkg.Memories = cleanedMem
+	}
+	contextJSON, _ := json.Marshal(evalPkg)
+
+	userPrompt := fmt.Sprintf("User Query: %s\n\nContext Package:\n%s", query, string(contextJSON))
+
+	reqBody := chatCompletionRequest{
+		Model: s.cfg.OpenRouterEvaluationModel,
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		},
+		ResponseFormat: &responseFormat{Type: "json_object"},
+	}
+
+	jsonBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer "+s.cfg.OpenRouterAPIKey))
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("openrouter evaluate context api returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var respBody chatCompletionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
+		return nil, err
+	}
+
+	if len(respBody.Choices) == 0 {
+		return nil, fmt.Errorf("openrouter evaluate context api returned empty choices")
+	}
+
+	content := respBody.Choices[0].Message.Content
+
+	var eval domain.ContextEvaluation
+	if err := json.Unmarshal([]byte(content), &eval); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON evaluation response: %w", err)
+	}
+
+	eval.Query = query
+	eval.ContextSnapshot = contextJSON
+
+	return &eval, nil
 }
 

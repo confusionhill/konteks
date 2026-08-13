@@ -105,6 +105,14 @@ func main() {
 		log.Println("room archival and sequence migration applied successfully.")
 	}
 
+	migrationFile7 := "db/migrations/000007_context_evaluations.up.sql"
+	log.Printf("applying database migrations from %s...", migrationFile7)
+	if err := runMigrations(db, migrationFile7); err != nil {
+		log.Printf("migrations warning (continuing execution): %v", err)
+	} else {
+		log.Println("context evaluations migration applied successfully.")
+	}
+
 	// 4. Initialize Core Repositories
 	authRepo := repository.NewAuthRepository(db)
 	roomRepo := repository.NewRoomRepository(db)
@@ -112,6 +120,7 @@ func main() {
 	memoryRepo := repository.NewMemoryRepository(db)
 	eventRepo := repository.NewEventRepository(db)
 	usageRepo := repository.NewUsageRepository(db)
+	evalRepo := repository.NewEvaluationRepository(db)
 
 	// 5. Initialize Services & Clients
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
@@ -127,7 +136,7 @@ func main() {
 	// 6. Initialize Business Logic Usecases
 	roomUsecase := usecase.NewRoomUsecase(roomRepo)
 	messageUsecase := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider)
-	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider)
+	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, evalRepo, cfg)
 	eventUsecase := usecase.NewEventUsecase(roomRepo, eventRepo)
 	usageUsecase := usecase.NewUsageUsecase(usageRepo)
 
@@ -139,7 +148,7 @@ func main() {
 	messageHandler := handler.NewMessageHandler(messageUsecase)
 	contextHandler := handler.NewContextHandler(contextUsecase)
 	eventHandler := handler.NewEventHandler(eventUsecase, eventBroker)
-	dashboardHandler := handler.NewDashboardHandler(usageUsecase, roomUsecase, messageUsecase, roomRepo, storageProvider)
+	dashboardHandler := handler.NewDashboardHandler(usageUsecase, roomUsecase, messageUsecase, roomRepo, storageProvider, evalRepo)
 
 	// 8. Initialize Echo HTTP Router
 	e := echo.New()
@@ -183,6 +192,8 @@ func main() {
 	v1.GET("/dashboard/rooms", dashboardHandler.ListRooms)
 	v1.GET("/dashboard/rooms/:room_id", dashboardHandler.GetRoomDetail)
 	v1.GET("/dashboard/rooms/:room_id/archive-url", dashboardHandler.GetArchiveURL)
+	v1.GET("/evaluations/summary", dashboardHandler.GetEvaluationsSummary)
+	v1.GET("/rooms/:room_id/evaluations", dashboardHandler.GetRoomEvaluations)
 
 	// 9. Bind Listeners & Listen
 	serverPort := fmt.Sprintf(":%d", cfg.Port)

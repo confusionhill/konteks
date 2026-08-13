@@ -10,8 +10,12 @@ import (
 	"log"
 	"strings"
 	"time"
+	"math/rand"
 
+	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dika/contextkit/backend/internal/config"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 )
@@ -22,6 +26,14 @@ type contextUsecase struct {
 	memoryRepo       domain.MemoryRepository
 	openRouterClient domain.OpenRouterServiceClient
 	storageProvider  domain.StorageProvider
+	evalRepo         domain.EvaluationRepository
+	cfg              *config.Config
+	evalQueue        chan evalTask
+}
+
+type evalTask struct {
+	Query string
+	Pkg   *domain.ContextPackage
 }
 
 func NewContextUsecase(
@@ -30,13 +42,44 @@ func NewContextUsecase(
 	memoryRepo domain.MemoryRepository,
 	openRouterClient domain.OpenRouterServiceClient,
 	storageProvider domain.StorageProvider,
+	evalRepo domain.EvaluationRepository,
+	cfg *config.Config,
 ) domain.ContextUsecase {
-	return &contextUsecase{
+	u := &contextUsecase{
 		roomRepo:         roomRepo,
 		messageRepo:      messageRepo,
 		memoryRepo:       memoryRepo,
 		openRouterClient: openRouterClient,
 		storageProvider:  storageProvider,
+		evalRepo:         evalRepo,
+		cfg:              cfg,
+		evalQueue:        make(chan evalTask, 1000),
+	}
+	
+	// Spawn background evaluation workers
+	for i := 0; i < 2; i++ {
+		go u.evaluationWorker()
+	}
+
+	return u
+}
+
+func (u *contextUsecase) evaluationWorker() {
+	for task := range u.evalQueue {
+		ctx := context.Background()
+		eval, err := u.openRouterClient.EvaluateContext(ctx, task.Query, task.Pkg)
+		if err != nil {
+			log.Printf("[Evaluation Worker Error]: failed to evaluate context: %v", err)
+			continue
+		}
+		
+		eval.ID = uuid.NewString()
+		eval.RoomID = task.Pkg.RoomID
+		if err := u.evalRepo.Create(ctx, eval); err != nil {
+			log.Printf("[Evaluation Worker Error]: failed to save evaluation: %v", err)
+		} else {
+			log.Printf("[Evaluation Worker]: successfully evaluated context for room %s (Score: %.2f/%.2f)", eval.RoomID, eval.RelevanceScore, eval.CompletenessScore)
+		}
 	}
 }
 
@@ -461,6 +504,16 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		StrategyUsed:     strategy,
 		TokensEstimated:  estimatedTokens,
 		TokensProcessed:  processedTokens,
+	}
+
+	// Async Context Evaluation based on sample rate
+	if u.cfg.EvaluationSampleRate > 0 && rand.Float64() <= u.cfg.EvaluationSampleRate {
+		select {
+		case u.evalQueue <- evalTask{Query: req.Query, Pkg: pkg}:
+			// Successfully queued
+		default:
+			log.Printf("[Context Usecase Warning]: eval queue is full, skipping evaluation")
+		}
 	}
 
 	return pkg, nil

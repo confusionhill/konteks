@@ -173,3 +173,15 @@ response = openai.chat.completions.create(
 - [ ] Multi-provider memory router (Honcho, Redis AMS, Zep)
 - [ ] Context quality scoring & observability analytics
 - [ ] Multi-language SDK ecosystem (TypeScript, Python, Go)
+
+---
+
+## 7. Why Context Evaluation?
+
+Context quality scoring and observability analytics transform context retrieval from a "black box" into a highly measurable, tunable engineering component. By evaluating **Relevance**, **Completeness**, and **Token Efficiency**, developers can:
+
+1. **Tune Context Policies:** Adjust `MaxHistoryDepth`, `MaxTokens`, and `FreshnessWeight` to save money (if token efficiency is low) or improve accuracy (if completeness is low).
+2. **A/B Test Retrieval Strategies:** Mathematically compare strategies (`auto`, `hybrid`, `recent_heavy`, `memory_heavy`) to see which yields the best context for a specific agent.
+3. **Debug "Hallucinations":** Isolate whether a bad agent response was due to a flawed prompt/model, or simply because it was starved of the correct context.
+4. **Improve Dynamic Schemas:** If completeness is frequently low, developers can update their JSON schemas to capture state variables better.
+5. **Automated Health Monitoring:** Catch degradation in the agent's capabilities before end-users notice by monitoring global completeness scores.

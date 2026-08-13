@@ -15,6 +15,7 @@ type DashboardHandler struct {
 	messageUsecase domain.MessageUsecase
 	roomRepo       domain.RoomRepository
 	storage        domain.StorageProvider
+	evalRepo       domain.EvaluationRepository
 }
 
 func NewDashboardHandler(
@@ -23,6 +24,7 @@ func NewDashboardHandler(
 	messageUsecase domain.MessageUsecase,
 	roomRepo domain.RoomRepository,
 	storage domain.StorageProvider,
+	evalRepo domain.EvaluationRepository,
 ) *DashboardHandler {
 	return &DashboardHandler{
 		usageUsecase:   usageUsecase,
@@ -30,6 +32,7 @@ func NewDashboardHandler(
 		messageUsecase: messageUsecase,
 		roomRepo:       roomRepo,
 		storage:        storage,
+		evalRepo:       evalRepo,
 	}
 }
 
@@ -198,4 +201,31 @@ func (h *DashboardHandler) GetArchiveURL(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"url": url})
+}
+
+func (h *DashboardHandler) GetEvaluationsSummary(c echo.Context) error {
+	summary, err := h.evalRepo.GetSummary(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, summary)
+}
+
+func (h *DashboardHandler) GetRoomEvaluations(c echo.Context) error {
+	roomID := c.Param("room_id")
+	if roomID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id"})
+	}
+
+	evals, err := h.evalRepo.GetByRoomID(c.Request().Context(), roomID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if evals == nil {
+		evals = []domain.ContextEvaluation{}
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"evaluations": evals,
+	})
 }

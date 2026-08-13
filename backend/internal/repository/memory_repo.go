@@ -146,3 +146,46 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 
 	return memories, nil
 }
+
+func (r *memoryRepository) ListByRoom(ctx context.Context, roomID string) ([]domain.Memory, error) {
+	query := `
+		SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+		FROM memories
+		WHERE room_id = $1
+	`
+	type dbMemory struct {
+		ID             string  `db:"id"`
+		TenantID       string  `db:"tenant_id"`
+		RoomID         *string `db:"room_id"`
+		ExternalUserID *string `db:"external_user_id"`
+		Content        string  `db:"content"`
+		EmbeddingText  string  `db:"embedding"`
+		Metadata       string  `db:"metadata"`
+		CreatedAt      string  `db:"created_at"`
+	}
+
+	var rows []dbMemory
+	err := r.db.SelectContext(ctx, &rows, query, roomID)
+	if err != nil {
+		return nil, err
+	}
+
+	memories := make([]domain.Memory, len(rows))
+	for i, row := range rows {
+		emb, err := stringToFloat32Array(row.EmbeddingText)
+		if err != nil {
+			return nil, err
+		}
+		memories[i] = domain.Memory{
+			ID:             row.ID,
+			TenantID:       row.TenantID,
+			RoomID:         row.RoomID,
+			ExternalUserID: row.ExternalUserID,
+			Content:        row.Content,
+			Embedding:      emb,
+			Metadata:       row.Metadata,
+		}
+	}
+
+	return memories, nil
+}

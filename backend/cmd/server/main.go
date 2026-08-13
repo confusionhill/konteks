@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -96,6 +97,14 @@ func main() {
 		log.Println("room policy and schema migration applied successfully.")
 	}
 
+	migrationFile6 := "db/migrations/000006_room_archival_and_sequence.up.sql"
+	log.Printf("applying database migrations from %s...", migrationFile6)
+	if err := runMigrations(db, migrationFile6); err != nil {
+		log.Printf("migrations warning (continuing execution): %v", err)
+	} else {
+		log.Println("room archival and sequence migration applied successfully.")
+	}
+
 	// 4. Initialize Core Repositories
 	authRepo := repository.NewAuthRepository(db)
 	roomRepo := repository.NewRoomRepository(db)
@@ -106,11 +115,19 @@ func main() {
 
 	// 5. Initialize Services & Clients
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
+	storageProvider, err := service.NewS3StorageProvider(cfg)
+	if err != nil {
+		log.Fatalf("failed to initialize S3 storage provider: %v", err)
+	}
+	// Ensure the bucket exists on server startup
+	if err := storageProvider.EnsureBucketExists(context.Background()); err != nil {
+		log.Printf("[Warning]: failed to ensure S3 bucket on startup: %v", err)
+	}
 
 	// 6. Initialize Business Logic Usecases
 	roomUsecase := usecase.NewRoomUsecase(roomRepo)
-	messageUsecase := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient)
-	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient)
+	messageUsecase := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider)
+	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider)
 	eventUsecase := usecase.NewEventUsecase(roomRepo, eventRepo)
 	usageUsecase := usecase.NewUsageUsecase(usageRepo)
 

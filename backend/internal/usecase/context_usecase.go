@@ -1,11 +1,15 @@
 package usecase
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 )
@@ -15,6 +19,7 @@ type contextUsecase struct {
 	messageRepo      domain.MessageRepository
 	memoryRepo       domain.MemoryRepository
 	openRouterClient domain.OpenRouterServiceClient
+	storageProvider  domain.StorageProvider
 }
 
 func NewContextUsecase(
@@ -22,13 +27,30 @@ func NewContextUsecase(
 	messageRepo domain.MessageRepository,
 	memoryRepo domain.MemoryRepository,
 	openRouterClient domain.OpenRouterServiceClient,
+	storageProvider domain.StorageProvider,
 ) domain.ContextUsecase {
 	return &contextUsecase{
 		roomRepo:         roomRepo,
 		messageRepo:      messageRepo,
 		memoryRepo:       memoryRepo,
 		openRouterClient: openRouterClient,
+		storageProvider:  storageProvider,
 	}
+}
+
+type ArchivedRoomPayload struct {
+	RoomState domain.RoomState `json:"state"`
+	Messages  []domain.Message `json:"messages"`
+	Memories  []domain.Memory  `json:"memories"`
+}
+
+func decompressGzip(data []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	return io.ReadAll(reader)
 }
 
 // Zero-Latency Heuristic Intent Classifier (Sub-0.1ms Go string matching)
@@ -87,6 +109,85 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 	}
 	if room == nil {
 		return nil, fmt.Errorf("room not found or unauthorized")
+	}
+
+	// Trigger Stage 1 Hydration if Room is Archived
+	if room.Status == domain.RoomStatusArchived {
+		log.Printf("[Context Engine]: Room %s is archived. Triggering Stage 1 Hydration...", roomID)
+		err = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lock room status to hydrating: %w", err)
+		}
+
+		if room.ArchiveS3Path == nil || *room.ArchiveS3Path == "" {
+			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
+			return nil, fmt.Errorf("room is archived but archive S3 path is empty")
+		}
+
+		archiveBytes, err := u.storageProvider.GetObject(ctx, *room.ArchiveS3Path)
+		if err != nil {
+			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
+			return nil, fmt.Errorf("failed to retrieve room archive: %w", err)
+		}
+
+		decompressed, err := decompressGzip(archiveBytes)
+		if err != nil {
+			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
+			return nil, fmt.Errorf("failed to decompress archive data: %w", err)
+		}
+
+		var payload ArchivedRoomPayload
+		if err := json.Unmarshal(decompressed, &payload); err != nil {
+			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
+			return nil, fmt.Errorf("failed to parse archive JSON: %w", err)
+		}
+
+		// Stage 1: Synchronously restore RoomState and last 3 messages
+		var stage1Msgs []domain.Message
+		var stage2Msgs []domain.Message
+		if len(payload.Messages) > 3 {
+			stage1Msgs = payload.Messages[len(payload.Messages)-3:]
+			stage2Msgs = payload.Messages[:len(payload.Messages)-3]
+		} else {
+			stage1Msgs = payload.Messages
+		}
+
+		err = u.roomRepo.HydrateRoomTx(ctx, roomID, &payload.RoomState, stage1Msgs, nil)
+		if err != nil {
+			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
+			return nil, fmt.Errorf("failed to execute Stage 1 hydration: %w", err)
+		}
+
+		// Stage 2: Asynchronously backfill the rest in a background goroutine
+		go func() {
+			bgCtx := context.Background()
+			log.Printf("[Context Engine]: Spawning Stage 2 Backfill for room %s...", roomID)
+			errHydrate := u.roomRepo.HydrateRoomTx(bgCtx, roomID, nil, stage2Msgs, payload.Memories)
+			if errHydrate != nil {
+				log.Printf("[Context Engine Background Hydration Error]: %v", errHydrate)
+			} else {
+				log.Printf("[Context Engine]: Stage 2 Backfill completed successfully for room %s.", roomID)
+			}
+		}()
+
+		room.Status = domain.RoomStatusActive
+	}
+
+	// If room is hydrating, wait/block until active
+	if room.Status == domain.RoomStatusHydrating {
+		log.Printf("[Context Engine]: Room %s is currently hydrating. Blocking request...", roomID)
+		start := time.Now()
+		for {
+			time.Sleep(50 * time.Millisecond)
+			r, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
+			if err == nil && r != nil && r.Status == domain.RoomStatusActive {
+				room = r
+				break
+			}
+			if time.Since(start) > 5*time.Second {
+				return nil, fmt.Errorf("timeout waiting for room hydration")
+			}
+		}
 	}
 
 	// 2. Merge Policy Options
@@ -159,8 +260,18 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		}
 	}
 
-	// 5. Retrieve recent message history
-	history, err := u.messageRepo.ListByRoom(ctx, roomID, msgLimit, 0)
+	// 5. Retrieve recent message history (Pending Delta Dynamic Fetching)
+	maxSeq, errMaxSeq := u.messageRepo.GetMaxSequence(ctx, roomID)
+	if errMaxSeq != nil {
+		maxSeq = 0
+	}
+	pendingCount := maxSeq - state.LastSummarizedSeq
+	finalMsgLimit := msgLimit
+	if pendingCount > int64(finalMsgLimit) {
+		finalMsgLimit = int(pendingCount)
+	}
+
+	history, err := u.messageRepo.ListByRoom(ctx, roomID, finalMsgLimit, 0)
 	if err != nil {
 		history = []domain.Message{}
 	}

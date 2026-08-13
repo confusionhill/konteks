@@ -13,6 +13,7 @@ type messageTask struct {
 	TenantID string
 	RoomID   string
 	Content  string
+	Sequence int64
 }
 
 type messageUsecase struct {
@@ -20,6 +21,7 @@ type messageUsecase struct {
 	messageRepo      domain.MessageRepository
 	memoryRepo       domain.MemoryRepository
 	openRouterClient domain.OpenRouterServiceClient
+	storageProvider  domain.StorageProvider
 	taskQueue        chan messageTask
 }
 
@@ -28,12 +30,14 @@ func NewMessageUsecase(
 	messageRepo domain.MessageRepository,
 	memoryRepo domain.MemoryRepository,
 	openRouterClient domain.OpenRouterServiceClient,
+	storageProvider domain.StorageProvider,
 ) domain.MessageUsecase {
 	mu := &messageUsecase{
 		roomRepo:         roomRepo,
 		messageRepo:      messageRepo,
 		memoryRepo:       memoryRepo,
 		openRouterClient: openRouterClient,
+		storageProvider:  storageProvider,
 		taskQueue:        make(chan messageTask, 5000),
 	}
 
@@ -102,16 +106,16 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(room.StateSchema))
 		if err != nil {
 			log.Printf("[Background Worker State Extraction Error]: failed to extract state: %v", err)
-		} else {
 			state.Summary = newSummary
 			state.ActiveTopic = activeTopic
 			state.State = json.RawMessage(stateJSON)
+			state.LastSummarizedSeq = task.Sequence
 
 			// 6. Upsert state
 			if err := u.roomRepo.UpsertState(ctx, state); err != nil {
 				log.Printf("[Background Worker State Save Error]: failed to save state: %v", err)
 			} else {
-				log.Printf("[Background Worker]: room state successfully updated. (Topic: '%s')", activeTopic)
+				log.Printf("[Background Worker]: room state successfully updated. (Topic: '%s', Sequence: %d)", activeTopic, task.Sequence)
 			}
 		}
 	}
@@ -125,6 +129,85 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 	}
 	if room == nil {
 		return nil, fmt.Errorf("room not found or unauthorized")
+	}
+
+	// Parallel Pre-Warming if Room is Archived
+	if room.Status == domain.RoomStatusArchived {
+		log.Printf("[Message Usecase]: Room %s is archived. Starting Parallel Pre-Warming...", roomID)
+		_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
+
+		// Spawn Stage 1 Hydration & Save asynchronously
+		go func() {
+			bgCtx := context.Background()
+			archiveBytes, err := u.storageProvider.GetObject(bgCtx, *room.ArchiveS3Path)
+			if err != nil {
+				log.Printf("[Pre-Warming Error] failed to retrieve S3 object: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			decompressed, err := decompressGzip(archiveBytes)
+			if err != nil {
+				log.Printf("[Pre-Warming Error] failed to decompress gzip: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			var payload ArchivedRoomPayload
+			if err := json.Unmarshal(decompressed, &payload); err != nil {
+				log.Printf("[Pre-Warming Error] failed to parse JSON: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			var stage1Msgs []domain.Message
+			var stage2Msgs []domain.Message
+			if len(payload.Messages) > 3 {
+				stage1Msgs = payload.Messages[len(payload.Messages)-3:]
+				stage2Msgs = payload.Messages[:len(payload.Messages)-3]
+			} else {
+				stage1Msgs = payload.Messages
+			}
+
+			err = u.roomRepo.HydrateRoomTx(bgCtx, roomID, &payload.RoomState, stage1Msgs, nil)
+			if err != nil {
+				log.Printf("[Pre-Warming Error] Stage 1 Hydration failed: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			// Save the new user message
+			msg := &domain.Message{
+				RoomID:  roomID,
+				Role:    role,
+				Content: content,
+			}
+			if err := u.messageRepo.Create(bgCtx, msg); err != nil {
+				log.Printf("[Pre-Warming Error] failed to save message: %v", err)
+			} else {
+				select {
+				case u.taskQueue <- messageTask{
+					TenantID: tenantID,
+					RoomID:   roomID,
+					Content:  content,
+					Sequence: msg.Sequence,
+				}:
+				default:
+				}
+			}
+
+			// Backfill Stage 2 in background
+			log.Printf("[Pre-Warming]: Stage 1 Hydrate complete. Spawning Stage 2 Backfill for room %s...", roomID)
+			_ = u.roomRepo.HydrateRoomTx(bgCtx, roomID, nil, stage2Msgs, payload.Memories)
+		}()
+
+		// Return optimistic message
+		msg := &domain.Message{
+			RoomID:  roomID,
+			Role:    role,
+			Content: content,
+		}
+		return msg, nil
 	}
 
 	// 2. Persist raw message
@@ -143,8 +226,9 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 		TenantID: tenantID,
 		RoomID:   roomID,
 		Content:  content,
+		Sequence: msg.Sequence,
 	}:
-		log.Printf("[API]: Message persisted. Queued state update task for room %s.", roomID)
+		log.Printf("[API]: Message persisted. Queued state update task for room %s (Sequence: %d).", roomID, msg.Sequence)
 	default:
 		log.Printf("[API Warning]: Background task queue full. Dropped update task for room %s.", roomID)
 	}

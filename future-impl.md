@@ -181,3 +181,26 @@ sequenceDiagram
 * **S3 Write Failures:** If S3 returns an error during the upload step, the worker aborts and rolls back the database transaction. Verbatim logs are never deleted from PostgreSQL until S3 responds with a `200 OK` and a valid ETag.
 * **Concurrent Hydration:** If a user sends a message *while* the worker is archiving the room, a database lock on the `rooms` row prevents race conditions. The API request will wait for the status to resolve, or reject with a retry code.
 * **Storage Cost Comparison:** PostgreSQL hot storage costs approx. **$0.15 - $0.25 per GB/month**, whereas AWS S3 Standard costs **$0.023 per GB/month** (and Glacier costs **$0.0036 per GB/month**), yielding up to a **98% cost reduction** for long-term memory.
+
+---
+
+### 5. Future Task Queue Migration (Redis & hibiken/asynq)
+
+At higher operational scale, ContextKit should transition from in-memory Go channels and synchronous CLI execution to a persistent Redis-backed task queue using `hibiken/asynq`.
+
+#### Key Drivers for Redis Transition:
+1. **Compaction Task Durability:** 
+   * **MVP Limitation:** If the web API container restarts, any message compaction tasks currently in `taskQueue chan messageTask` are permanently lost.
+   * **Future Solution:** Move `CreateMessage` enqueueing to a `message_compaction` Redis queue. Tasks survive container restarts and can be retried with exponential backoff on failure.
+2. **Archival Rate-Limiting & Throttling:**
+   * **MVP Limitation:** The CLI archiver processes inactive rooms sequentially. While safe, it doesn't scale well to thousands of concurrent archival tasks.
+   * **Future Solution:** The daily cron CLI enqueues room IDs to a `room_archival` Redis queue. Workers consume these tasks at a strict rate-limit (e.g. 10 tasks/minute) to protect LLM API token rate limits from spikes.
+
+#### Architecture Schema:
+```mermaid
+graph LR
+    API[ContextKit API Server] -->|Push durable task| Redis[Redis Queue (asynq)]
+    Cron[Daily Cron CLI] -->|Enqueue room IDs| Redis
+    Redis -->|Consume rate-limited| Worker[Compaction & Archiver Workers]
+```
+

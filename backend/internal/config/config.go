@@ -13,6 +13,10 @@ type Config struct {
 	OpenRouterBaseURL        string `json:"openrouter_base_url"`
 	OpenRouterEmbeddingModel string `json:"openrouter_embedding_model"`
 	OpenRouterChatModel      string `json:"openrouter_chat_model"`
+	S3Endpoint               string `json:"s3_endpoint"`
+	S3AccessKey              string `json:"s3_access_key"`
+	S3SecretKey              string `json:"s3_secret_key"`
+	S3Bucket                 string `json:"s3_bucket"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -49,6 +53,18 @@ func LoadConfig(path string) (*Config, error) {
 	if envChatModel := os.Getenv("OPENROUTER_CHAT_MODEL"); envChatModel != "" {
 		cfg.OpenRouterChatModel = envChatModel
 	}
+	if envS3Endpoint := os.Getenv("AWS_S3_ENDPOINT"); envS3Endpoint != "" {
+		cfg.S3Endpoint = envS3Endpoint
+	}
+	if envS3Access := os.Getenv("AWS_ACCESS_KEY_ID"); envS3Access != "" {
+		cfg.S3AccessKey = envS3Access
+	}
+	if envS3Secret := os.Getenv("AWS_SECRET_ACCESS_KEY"); envS3Secret != "" {
+		cfg.S3SecretKey = envS3Secret
+	}
+	if envS3Bucket := os.Getenv("AWS_S3_BUCKET"); envS3Bucket != "" {
+		cfg.S3Bucket = envS3Bucket
+	}
 
 	// Default fallbacks
 	if cfg.OpenRouterBaseURL == "" {
@@ -59,6 +75,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if cfg.OpenRouterEmbeddingModel == "" {
 		cfg.OpenRouterEmbeddingModel = "qwen/qwen3-embedding-8b"
+	}
+	if cfg.S3Bucket == "" {
+		cfg.S3Bucket = "contextkit-archive"
 	}
 
 	return &cfg, nil

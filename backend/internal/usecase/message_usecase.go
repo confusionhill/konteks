@@ -100,9 +100,12 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(room.StateSchema))
 		if err != nil {
 			log.Printf("[Background Worker State Extraction Error]: failed to extract state: %v", err)
+		} else {
 			state.Summary = newSummary
 			state.ActiveTopic = activeTopic
-			state.State = json.RawMessage(stateJSON)
+			if stateJSON != "" {
+				state.State = json.RawMessage(stateJSON)
+			}
 			state.LastSummarizedSeq = task.Sequence
 
 			if err := u.roomRepo.UpsertState(ctx, state); err != nil {

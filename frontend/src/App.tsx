@@ -15,10 +15,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
-        <div className="flex items-center space-x-3">
-          <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-semibold">Loading authentication...</span>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-600">
+        <div className="flex items-center space-x-3 bg-white p-4 rounded-xl border border-slate-200 shadow-soft">
+          <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-semibold text-slate-800">Loading authentication...</span>
         </div>
       </div>
     );

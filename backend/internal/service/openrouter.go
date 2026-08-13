@@ -85,8 +85,8 @@ type chatMessage struct {
 }
 
 type chatCompletionRequest struct {
-	Model          string        `json:"model"`
-	Messages       []chatMessage `json:"messages"`
+	Model          string          `json:"model"`
+	Messages       []chatMessage   `json:"messages"`
 	ResponseFormat *responseFormat `json:"response_format,omitempty"`
 }
 
@@ -380,4 +380,3 @@ Output ONLY a valid JSON object matching this schema:
 
 	return &eval, nil
 }
-

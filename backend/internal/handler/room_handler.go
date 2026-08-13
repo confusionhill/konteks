@@ -23,9 +23,9 @@ type createRoomRequest struct {
 }
 
 func (h *RoomHandler) CreateRoom(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	var req createRoomRequest
@@ -33,7 +33,7 @@ func (h *RoomHandler) CreateRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
-	room, err := h.roomUsecase.CreateRoom(c.Request().Context(), tenantID, req.ExternalUserID, req.StateSchema, req.DefaultPolicy)
+	room, err := h.roomUsecase.CreateRoom(c.Request().Context(), projectID, req.ExternalUserID, req.StateSchema, req.DefaultPolicy)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -42,9 +42,9 @@ func (h *RoomHandler) CreateRoom(c echo.Context) error {
 }
 
 func (h *RoomHandler) GetRoomState(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -52,7 +52,7 @@ func (h *RoomHandler) GetRoomState(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id parameter"})
 	}
 
-	state, err := h.roomUsecase.GetRoomState(c.Request().Context(), tenantID, roomID)
+	state, err := h.roomUsecase.GetRoomState(c.Request().Context(), projectID, roomID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
 	}
@@ -61,9 +61,9 @@ func (h *RoomHandler) GetRoomState(c echo.Context) error {
 }
 
 func (h *RoomHandler) DeleteRoom(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -71,7 +71,7 @@ func (h *RoomHandler) DeleteRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id parameter"})
 	}
 
-	err := h.roomUsecase.DeleteRoom(c.Request().Context(), tenantID, roomID)
+	err := h.roomUsecase.DeleteRoom(c.Request().Context(), projectID, roomID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -85,9 +85,9 @@ type updateRoomRequest struct {
 }
 
 func (h *RoomHandler) UpdateRoom(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -100,7 +100,7 @@ func (h *RoomHandler) UpdateRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
-	room, err := h.roomUsecase.UpdateRoom(c.Request().Context(), tenantID, roomID, req.StateSchema, req.DefaultPolicy)
+	room, err := h.roomUsecase.UpdateRoom(c.Request().Context(), projectID, roomID, req.StateSchema, req.DefaultPolicy)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

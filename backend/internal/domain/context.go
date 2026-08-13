@@ -50,6 +50,7 @@ type OpenRouterServiceClient interface {
 
 type ContextEvaluation struct {
 	ID                   string          `json:"id"`
+	ProjectID            string          `json:"project_id"`
 	RoomID               string          `json:"room_id"`
 	Query                string          `json:"query"`
 	ContextSnapshot      json.RawMessage `json:"context_snapshot"`
@@ -71,9 +72,9 @@ type EvaluationSummary struct {
 type EvaluationRepository interface {
 	Create(ctx context.Context, eval *ContextEvaluation) error
 	GetByRoomID(ctx context.Context, roomID string) ([]ContextEvaluation, error)
-	GetSummary(ctx context.Context) (*EvaluationSummary, error)
+	GetSummary(ctx context.Context, projectID string) (*EvaluationSummary, error)
 }
 
 type ContextUsecase interface {
-	GetContextPackage(ctx context.Context, tenantID string, roomID string, req GetContextRequest) (*ContextPackage, error)
+	GetContextPackage(ctx context.Context, projectID string, roomID string, req GetContextRequest) (*ContextPackage, error)
 }

@@ -20,9 +20,8 @@ func NewEventUsecase(roomRepo domain.RoomRepository, eventRepo domain.EventRepos
 	}
 }
 
-func (u *eventUsecase) LogEvent(ctx context.Context, tenantID string, roomID string, eventType string, payload any) (*domain.RoomEvent, error) {
-	// Verify room ownership
-	room, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
+func (u *eventUsecase) LogEvent(ctx context.Context, projectID string, roomID string, eventType string, payload any) (*domain.RoomEvent, error) {
+	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 	if err != nil {
 		return nil, err
 	}
@@ -48,9 +47,8 @@ func (u *eventUsecase) LogEvent(ctx context.Context, tenantID string, roomID str
 	return event, nil
 }
 
-func (u *eventUsecase) ListEvents(ctx context.Context, tenantID string, roomID string, limit int) ([]domain.RoomEvent, error) {
-	// Verify room ownership
-	room, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
+func (u *eventUsecase) ListEvents(ctx context.Context, projectID string, roomID string, limit int) ([]domain.RoomEvent, error) {
+	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 	if err != nil {
 		return nil, err
 	}

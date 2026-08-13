@@ -16,13 +16,12 @@ func NewRoomUsecase(roomRepo domain.RoomRepository) domain.RoomUsecase {
 	return &roomUsecase{roomRepo: roomRepo}
 }
 
-func (u *roomUsecase) CreateRoom(ctx context.Context, tenantID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
-	return u.roomRepo.Create(ctx, tenantID, externalUserID, stateSchema, defaultPolicy)
+func (u *roomUsecase) CreateRoom(ctx context.Context, projectID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+	return u.roomRepo.Create(ctx, projectID, externalUserID, stateSchema, defaultPolicy)
 }
 
-func (u *roomUsecase) GetRoomState(ctx context.Context, tenantID string, roomID string) (*domain.RoomState, error) {
-	// Verify room exists and belongs to authorized tenant
-	room, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
+func (u *roomUsecase) GetRoomState(ctx context.Context, projectID string, roomID string) (*domain.RoomState, error) {
+	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 	if err != nil {
 		return nil, err
 	}
@@ -33,14 +32,14 @@ func (u *roomUsecase) GetRoomState(ctx context.Context, tenantID string, roomID 
 	return u.roomRepo.GetState(ctx, roomID)
 }
 
-func (u *roomUsecase) DeleteRoom(ctx context.Context, tenantID string, roomID string) error {
-	return u.roomRepo.Delete(ctx, tenantID, roomID)
+func (u *roomUsecase) DeleteRoom(ctx context.Context, projectID string, roomID string) error {
+	return u.roomRepo.Delete(ctx, projectID, roomID)
 }
 
-func (u *roomUsecase) ListRoomsOverview(ctx context.Context, tenantID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
-	return u.roomRepo.ListWithOverview(ctx, tenantID, search, status, sortBy, sortOrder, minMessages, limit, offset)
+func (u *roomUsecase) ListRoomsOverview(ctx context.Context, projectID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
+	return u.roomRepo.ListWithOverview(ctx, projectID, search, status, sortBy, sortOrder, minMessages, limit, offset)
 }
 
-func (u *roomUsecase) UpdateRoom(ctx context.Context, tenantID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
-	return u.roomRepo.Update(ctx, tenantID, roomID, stateSchema, defaultPolicy)
+func (u *roomUsecase) UpdateRoom(ctx context.Context, projectID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+	return u.roomRepo.Update(ctx, projectID, roomID, stateSchema, defaultPolicy)
 }

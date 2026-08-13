@@ -1,83 +1,185 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Cpu, ChartBar, Key } from '@phosphor-icons/react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import {
+  Layers,
+  ChevronDown,
+  LayoutDashboard,
+  MessageSquare,
+  Key,
+  Settings,
+  FolderKanban,
+  LogOut,
+  User as UserIcon,
+  Check,
+  Plus,
+} from 'lucide-react';
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, projects, activeProject, selectProject, logout } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleApiKeyChange = () => {
-    const current = localStorage.getItem('konteks_api_key') || 'dev_secret_key_123';
-    const updated = prompt('Enter Konteks API Key (Bearer Token):', current);
-    if (updated !== null) {
-      localStorage.setItem('konteks_api_key', updated.trim());
-      window.location.reload();
-    }
-  };
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const navTabs = [
+    { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'Rooms', path: '/dashboard/rooms', icon: MessageSquare },
+    { name: 'API Keys', path: '/dashboard/api-keys', icon: Key },
+    { name: 'Settings', path: '/dashboard/settings', icon: Settings },
+  ];
 
   return (
-    <div className="min-h-[100dvh] bg-background text-slate-900 flex flex-col relative overflow-hidden">
-      {/* Soft Background Gradient Orbs (Corporate Trust Aesthetic) */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-primary-100 rounded-full blur-3xl opacity-40 pointer-events-none -z-10" />
-      <div className="absolute top-1/3 -right-32 w-96 h-96 bg-secondary-100 rounded-full blur-3xl opacity-30 pointer-events-none -z-10" />
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col relative overflow-hidden">
+      {/* Background Decorative Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Navigation Header */}
-      <header className="bg-surface/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link to="/dashboard" className="flex items-center gap-2 group">
-              <img src="/konteksicon.svg" alt="Konteks Logo" className="w-8 h-8 drop-shadow-sm" />
-              <span className="font-extrabold text-xl tracking-tight text-slate-900 group-hover:text-primary-600 transition-colors">
+      {/* Top Header Bar */}
+      <header className="border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-xl sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            <Link to="/projects" className="flex items-center space-x-3 group">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                <Layers className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-xl font-bold tracking-tight text-white group-hover:text-indigo-300 transition-colors">
                 konteks
-              </span>
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">
-                Dashboard
               </span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-1">
-              <Link
-                to="/dashboard"
-                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                  location.pathname === '/dashboard'
-                    ? 'bg-indigo-50 text-primary-600'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
+            <span className="text-slate-700 h-5 w-px" />
+
+            {/* Project Switcher Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-800/70 hover:bg-slate-800 border border-slate-700/80 text-xs font-semibold text-slate-200 transition-all"
               >
-                Overview
-              </Link>
-            </nav>
+                <FolderKanban className="h-4 w-4 text-indigo-400 shrink-0" />
+                <span className="max-w-[140px] sm:max-w-[200px] truncate">
+                  {activeProject ? activeProject.name : 'Select Project'}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute left-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    Switch Project
+                  </div>
+
+                  <div className="max-h-56 overflow-y-auto py-1">
+                    {projects.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          selectProject(p);
+                          setDropdownOpen(false);
+                          navigate('/dashboard');
+                        }}
+                        className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between transition-colors ${
+                          activeProject?.id === p.id
+                            ? 'bg-indigo-600/20 text-indigo-300 font-semibold'
+                            : 'text-slate-300 hover:bg-slate-800/60'
+                        }`}
+                      >
+                        <span className="truncate">{p.name}</span>
+                        {activeProject?.id === p.id && <Check className="h-3.5 w-3.5 text-indigo-400 shrink-0 ml-2" />}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="border-t border-slate-800 mt-1 pt-1.5 px-2">
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        navigate('/projects');
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-semibold text-indigo-400 hover:bg-indigo-950/50 flex items-center space-x-2 transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>All Projects Hub</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* User Badge & Logout */}
+          <div className="flex items-center space-x-4">
+            <div className="hidden sm:flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1 text-xs">
+              <div className="h-6 w-6 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center">
+                <UserIcon className="h-3.5 w-3.5" />
+              </div>
+              <span className="font-semibold text-slate-200">{user?.name || user?.email}</span>
+            </div>
+
             <button
-              onClick={handleApiKeyChange}
-              className="inline-flex items-center gap-1.5 text-xs font-mono font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors border border-slate-200"
-              title="Set Bearer Token"
+              onClick={logout}
+              className="text-slate-400 hover:text-slate-200 p-2 rounded-xl border border-slate-800 hover:border-slate-700 hover:bg-slate-900 transition-all"
+              title="Sign Out"
             >
-              <Key size={14} className="text-primary-600" />
-              API Key
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         </div>
+
+        {/* Navigation Tabs Bar */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center space-x-1 overflow-x-auto no-scrollbar pt-1">
+          {navTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive =
+              tab.path === '/dashboard'
+                ? location.pathname === '/dashboard' || location.pathname === '/dashboard/'
+                : location.pathname.startsWith(tab.path);
+
+            return (
+              <Link
+                key={tab.path}
+                to={tab.path}
+                className={`flex items-center space-x-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+                  isActive
+                    ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
+                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{tab.name}</span>
+              </Link>
+            );
+          })}
+        </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
-        {children}
+      {/* Main Page Body */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        {children || <Outlet />}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200/80 bg-surface/50 py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-medium">
-          <div className="flex items-center gap-2 mb-2 sm:mb-0">
-            <ChartBar size={16} className="text-primary-600" />
-            <span>Konteks CaaS Infrastructure</span>
+      <footer className="border-t border-slate-800/80 bg-slate-900/40 py-4 text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <Layers className="h-4 w-4 text-indigo-400" />
+            <span>konteks CaaS Infrastructure &bull; Multi-Tenant Scoped Architecture</span>
           </div>
-          <span>Context-as-a-Service Engine &bull; Phase 1 MVP</span>
+          <span>Active Project: <strong className="text-slate-400">{activeProject?.name || 'None'}</strong></span>
         </div>
       </footer>
     </div>

@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log"
 
@@ -12,15 +10,8 @@ import (
 	"github.com/dika/contextkit/backend/internal/repository"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
-
-func generateRandomToken() (string, error) {
-	bytes := make([]byte, 20)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return "kt_" + hex.EncodeToString(bytes), nil
-}
 
 func main() {
 	cfg, err := config.LoadConfig("secrets/config.json")
@@ -37,36 +28,48 @@ func main() {
 	authRepo := repository.NewAuthRepository(db)
 	ctx := context.Background()
 
-	// 1. Create Tenant
-	tenantName := "Default Tenant"
-	tenant, err := authRepo.CreateTenant(ctx, tenantName)
+	// 1. Create or fetch User
+	user, err := authRepo.GetUserByEmail(ctx, "admin@admin.com")
 	if err != nil {
-		log.Fatalf("failed to create tenant: %v", err)
+		log.Fatalf("failed to check user: %v", err)
+	}
+	if user == nil {
+		hash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		user, err = authRepo.CreateUser(ctx, "admin@admin.com", string(hash), "Admin User")
+		if err != nil {
+			log.Fatalf("failed to create user: %v", err)
+		}
 	}
 
-	// 2. Generate and Hash API Key
-	token, err := generateRandomToken()
-	if err != nil {
-		log.Fatalf("failed to generate secure key: %v", err)
+	// 2. Create Project
+	projects, err := authRepo.ListProjectsByOwnerID(ctx, user.ID)
+	var projID string
+	if len(projects) == 0 {
+		proj, err := authRepo.CreateProject(ctx, "Demo AI Assistant Project", "Default project for testing", user.ID)
+		if err != nil {
+			log.Fatalf("failed to create project: %v", err)
+		}
+		projID = proj.ID
+	} else {
+		projID = projects[0].ID
 	}
 
-	hashBytes := sha256.Sum256([]byte(token))
+	// 3. Generate API Key
+	rawKey := "ck_live_dev_test_key_123"
+	hashBytes := sha256.Sum256([]byte(rawKey))
 	keyHash := fmt.Sprintf("%x", hashBytes)
 
-	// 3. Persist Key Hash
-	_, err = authRepo.CreateAPIKey(ctx, tenant.ID, "Primary API Key", keyHash)
+	_, err = authRepo.CreateAPIKey(ctx, projID, "Development Test Key", keyHash, "ck_live_dev...", nil)
 	if err != nil {
-		log.Fatalf("failed to store API key: %v", err)
+		log.Printf("API key seed info: %v", err)
 	}
 
 	fmt.Println("==================================================")
 	fmt.Println(" konteks Seed Completed Successfully!")
 	fmt.Println("==================================================")
-	fmt.Printf("Tenant Name : %s\n", tenant.Name)
-	fmt.Printf("Tenant ID   : %s\n", tenant.ID)
-	fmt.Printf("API Key     : %s\n", token)
-	fmt.Println("==================================================")
-	fmt.Println("IMPORTANT: Store this API key securely. It will not be shown again.")
-	fmt.Println("Use this key in your request header: Authorization: Bearer <API Key>")
+	fmt.Printf("User Email : %s\n", user.Email)
+	fmt.Printf("Password   : admin123\n")
+	fmt.Printf("Project ID : %s\n", projID)
+	fmt.Printf("API Key    : %s\n", rawKey)
 	fmt.Println("==================================================")
 }

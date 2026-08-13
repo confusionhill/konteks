@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/labstack/echo/v4"
@@ -37,12 +38,12 @@ func NewDashboardHandler(
 }
 
 func (h *DashboardHandler) GetSummary(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
-	summary, err := h.usageUsecase.GetUsageSummary(c.Request().Context(), tenantID)
+	summary, err := h.usageUsecase.GetUsageSummary(c.Request().Context(), projectID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -51,9 +52,9 @@ func (h *DashboardHandler) GetSummary(c echo.Context) error {
 }
 
 func (h *DashboardHandler) ListRooms(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	search := c.QueryParam("search")
@@ -87,7 +88,7 @@ func (h *DashboardHandler) ListRooms(c echo.Context) error {
 	}
 
 	rooms, total, err := h.roomUsecase.ListRoomsOverview(
-		c.Request().Context(), tenantID, search, status, sortBy, sortOrder, minMessages, limit, offset,
+		c.Request().Context(), projectID, search, status, sortBy, sortOrder, minMessages, limit, offset,
 	)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -107,9 +108,9 @@ type roomDetailResponse struct {
 }
 
 func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -117,7 +118,7 @@ func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id"})
 	}
 
-	room, err := h.roomRepo.GetByID(c.Request().Context(), tenantID, roomID)
+	room, err := h.roomRepo.GetByID(c.Request().Context(), projectID, roomID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -132,7 +133,7 @@ func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
 
 	var messages []domain.Message
 	if room.Status != domain.RoomStatusArchived {
-		messages, err = h.messageUsecase.ListMessages(c.Request().Context(), tenantID, roomID, 50, 0)
+		messages, err = h.messageUsecase.ListMessages(c.Request().Context(), projectID, roomID, 50, 0)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		}
@@ -145,7 +146,6 @@ func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
 		metrics = &domain.RoomMetrics{}
 	}
 
-	// Clean zero-cost read-only state response directly from PostgreSQL DB
 	var stateResp any
 	if state != nil {
 		var parsedState any
@@ -173,9 +173,9 @@ func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
 }
 
 func (h *DashboardHandler) GetArchiveURL(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -183,7 +183,7 @@ func (h *DashboardHandler) GetArchiveURL(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id"})
 	}
 
-	room, err := h.roomRepo.GetByID(c.Request().Context(), tenantID, roomID)
+	room, err := h.roomRepo.GetByID(c.Request().Context(), projectID, roomID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -194,8 +194,7 @@ func (h *DashboardHandler) GetArchiveURL(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "room is not in cold storage"})
 	}
 
-	// 15 minute lifetime
-	url, err := h.storage.GeneratePresignedURL(c.Request().Context(), *room.ArchiveS3Path, 15 * 60 * 1000 * 1000 * 1000)
+	url, err := h.storage.GeneratePresignedURL(c.Request().Context(), *room.ArchiveS3Path, 15*time.Minute)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -204,7 +203,9 @@ func (h *DashboardHandler) GetArchiveURL(c echo.Context) error {
 }
 
 func (h *DashboardHandler) GetEvaluationsSummary(c echo.Context) error {
-	summary, err := h.evalRepo.GetSummary(c.Request().Context())
+	projectID, _ := c.Get("project_id").(string)
+
+	summary, err := h.evalRepo.GetSummary(c.Request().Context(), projectID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

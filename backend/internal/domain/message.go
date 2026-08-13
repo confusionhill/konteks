@@ -16,7 +16,7 @@ type Message struct {
 
 type Memory struct {
 	ID             string    `db:"id" json:"id"`
-	TenantID       string    `db:"tenant_id" json:"tenant_id"`
+	ProjectID      string    `db:"project_id" json:"project_id"`
 	RoomID         *string   `db:"room_id" json:"room_id"`
 	ExternalUserID *string   `db:"external_user_id" json:"external_user_id"`
 	Content        string    `db:"content" json:"content"`
@@ -37,6 +37,6 @@ type MemoryRepository interface {
 }
 
 type MessageUsecase interface {
-	CreateMessage(ctx context.Context, tenantID string, roomID string, role string, content string) (*Message, error)
-	ListMessages(ctx context.Context, tenantID string, roomID string, limit int, beforeSeq int64) ([]Message, error)
+	CreateMessage(ctx context.Context, projectID string, roomID string, role string, content string) (*Message, error)
+	ListMessages(ctx context.Context, projectID string, roomID string, limit int, beforeSeq int64) ([]Message, error)
 }

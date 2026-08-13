@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/labstack/echo/v4"
@@ -22,9 +23,9 @@ type createMessageRequest struct {
 }
 
 func (h *MessageHandler) CreateMessage(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -37,14 +38,18 @@ func (h *MessageHandler) CreateMessage(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
-	if req.Role != "user" && req.Role != "assistant" && req.Role != "system" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "role must be user, assistant, or system"})
+	req.Role = strings.TrimSpace(req.Role)
+	if req.Role == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "role cannot be empty"})
+	}
+	if len(req.Role) > 50 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "role cannot exceed 50 characters"})
 	}
 	if req.Content == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "content cannot be empty"})
 	}
 
-	msg, err := h.messageUsecase.CreateMessage(c.Request().Context(), tenantID, roomID, req.Role, req.Content)
+	msg, err := h.messageUsecase.CreateMessage(c.Request().Context(), projectID, roomID, req.Role, req.Content)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -53,9 +58,9 @@ func (h *MessageHandler) CreateMessage(c echo.Context) error {
 }
 
 func (h *MessageHandler) ListMessages(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -79,7 +84,7 @@ func (h *MessageHandler) ListMessages(c echo.Context) error {
 		}
 	}
 
-	messages, err := h.messageUsecase.ListMessages(c.Request().Context(), tenantID, roomID, limit, beforeSeq)
+	messages, err := h.messageUsecase.ListMessages(c.Request().Context(), projectID, roomID, limit, beforeSeq)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

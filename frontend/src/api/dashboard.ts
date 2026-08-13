@@ -1,5 +1,5 @@
 export interface UsageSummary {
-  tenant_id: string;
+  project_id: string;
   total_rooms: number;
   active_rooms: number;
   archived_rooms: number;
@@ -23,6 +23,7 @@ export interface EvaluationSummary {
 
 export interface ContextEvaluation {
   id: string;
+  project_id?: string;
   room_id: string;
   query: string;
   context_snapshot: any;
@@ -50,7 +51,7 @@ export interface RoomOverview {
 export interface Message {
   id: string;
   room_id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: string;
   content: string;
   sequence: number;
   created_at: string;
@@ -74,7 +75,7 @@ export interface RoomState {
 export interface RoomDetail {
   room: {
     id: string;
-    tenant_id: string;
+    project_id: string;
     external_user_id: string;
     created_at: string;
     updated_at: string;
@@ -90,12 +91,41 @@ export interface RoomDetail {
   messages: Message[];
 }
 
+export interface APIKey {
+  id: string;
+  project_id: string;
+  name: string;
+  key_prefix: string;
+  last_used_at?: string;
+  created_at: string;
+  expires_at?: string;
+  revoked_at?: string;
+}
+
 const getAuthHeaders = (): HeadersInit => {
-  const apiKey = localStorage.getItem('konteks_api_key') || 'dev_secret_key_123';
-  return {
-    Authorization: `Bearer ${apiKey}`,
+  const token = localStorage.getItem('konteks_token');
+  const activeProjStr = localStorage.getItem('konteks_active_project');
+  let activeProjId = '';
+  if (activeProjStr) {
+    try {
+      activeProjId = JSON.parse(activeProjStr)?.id || '';
+    } catch {
+      // ignore parse error
+    }
+  }
+
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (activeProjId) {
+    headers['X-Project-ID'] = activeProjId;
+  }
+
+  return headers;
 };
 
 export async function fetchSummary(): Promise<UsageSummary> {
@@ -190,4 +220,38 @@ export async function fetchRoomEvaluations(roomId: string): Promise<{ evaluation
     throw new Error(`Failed to fetch room evaluations: ${res.statusText}`);
   }
   return res.json();
+}
+
+// API Key Management Client Functions
+export async function fetchAPIKeys(projectId: string): Promise<APIKey[]> {
+  const res = await fetch(`/v1/projects/${projectId}/api-keys`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch API keys: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.api_keys || [];
+}
+
+export async function createAPIKey(projectId: string, name: string, expiresInDays?: number): Promise<{ api_key: APIKey; raw_key: string }> {
+  const res = await fetch(`/v1/projects/${projectId}/api-keys`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ name, expires_in_days: expiresInDays }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to create API key');
+  }
+  return res.json();
+}
+
+export async function revokeAPIKey(projectId: string, keyId: string): Promise<void> {
+  const res = await fetch(`/v1/projects/${projectId}/api-keys/${keyId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to revoke API key');
+  }
 }

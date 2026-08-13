@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dika/contextkit/backend/internal/config"
 	"github.com/dika/contextkit/backend/internal/domain"
 )
 
@@ -31,16 +32,16 @@ type mockRoomRepo struct {
 	states map[string]*domain.RoomState
 }
 
-func (m *mockRoomRepo) Create(ctx context.Context, tenantID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+func (m *mockRoomRepo) Create(ctx context.Context, projectID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
 	return nil, nil
 }
-func (m *mockRoomRepo) GetByID(ctx context.Context, tenantID string, roomID string) (*domain.Room, error) {
+func (m *mockRoomRepo) GetByID(ctx context.Context, projectID string, roomID string) (*domain.Room, error) {
 	return m.rooms[roomID], nil
 }
-func (m *mockRoomRepo) Update(ctx context.Context, tenantID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+func (m *mockRoomRepo) Update(ctx context.Context, projectID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
 	return nil, nil
 }
-func (m *mockRoomRepo) Delete(ctx context.Context, tenantID string, roomID string) error {
+func (m *mockRoomRepo) Delete(ctx context.Context, projectID string, roomID string) error {
 	return nil
 }
 func (m *mockRoomRepo) GetState(ctx context.Context, roomID string) (*domain.RoomState, error) {
@@ -50,7 +51,7 @@ func (m *mockRoomRepo) UpsertState(ctx context.Context, state *domain.RoomState)
 	m.states[state.RoomID] = state
 	return nil
 }
-func (m *mockRoomRepo) ListWithOverview(ctx context.Context, tenantID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
+func (m *mockRoomRepo) ListWithOverview(ctx context.Context, projectID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
 	return nil, 0, nil
 }
 func (m *mockRoomRepo) ListRoomsForArchival(ctx context.Context, inactiveDuration time.Duration, roomID string) ([]domain.Room, error) {
@@ -66,9 +67,6 @@ func (m *mockRoomRepo) ArchiveRoomTx(ctx context.Context, roomID string, archive
 	return nil
 }
 func (m *mockRoomRepo) HydrateRoomTx(ctx context.Context, roomID string, state *domain.RoomState, messages []domain.Message, memories []domain.Memory) error {
-	if state != nil {
-		m.states[roomID] = state
-	}
 	return nil
 }
 
@@ -101,37 +99,52 @@ func (m *mockMemoryRepo) ListByRoom(ctx context.Context, roomID string) ([]domai
 	return nil, nil
 }
 
-// Mock OpenRouterClient
+// Mock EvaluationRepository
+type mockEvalRepo struct{}
+
+func (m *mockEvalRepo) Create(ctx context.Context, eval *domain.ContextEvaluation) error {
+	return nil
+}
+func (m *mockEvalRepo) GetByRoomID(ctx context.Context, roomID string) ([]domain.ContextEvaluation, error) {
+	return nil, nil
+}
+func (m *mockEvalRepo) GetSummary(ctx context.Context, projectID string) (*domain.EvaluationSummary, error) {
+	return &domain.EvaluationSummary{}, nil
+}
+
+// Mock OpenRouterServiceClient
 type mockOpenRouter struct{}
 
 func (m *mockOpenRouter) GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
-	return nil, nil
+	return []float32{0.1, 0.2}, nil
 }
 func (m *mockOpenRouter) ExtractStateAndSummary(ctx context.Context, history []domain.Message, currentSummary string, schemaJSON string) (string, string, string, error) {
-	return "", "", "", nil
+	return "summary", "topic", "{}", nil
 }
 func (m *mockOpenRouter) ResolveReferences(ctx context.Context, history []domain.Message, stateJSON string) (map[string]string, []domain.Entity, error) {
-	return nil, nil, nil
+	return map[string]string{}, []domain.Entity{}, nil
+}
+func (m *mockOpenRouter) EvaluateContext(ctx context.Context, query string, contextPkg *domain.ContextPackage) (*domain.ContextEvaluation, error) {
+	return &domain.ContextEvaluation{}, nil
 }
 
 func TestGetContextPackage_PendingDelta(t *testing.T) {
 	roomID := "room-1"
-	tenantID := "tenant-1"
+	projectID := "project-1"
 
 	room := &domain.Room{
-		ID:       roomID,
-		TenantID: tenantID,
-		Status:   domain.RoomStatusActive,
+		ID:        roomID,
+		ProjectID: projectID,
+		Status:    domain.RoomStatusActive,
 	}
 
 	state := &domain.RoomState{
 		RoomID:            roomID,
 		Summary:           "Testing Pending Delta",
 		State:             json.RawMessage("{}"),
-		LastSummarizedSeq: 5, // Compaction is at sequence 5
+		LastSummarizedSeq: 5,
 	}
 
-	// Message list contains sequence 6 to 8 (8 is max sequence)
 	messages := []domain.Message{
 		{RoomID: roomID, Content: "Msg 6", Sequence: 6},
 		{RoomID: roomID, Content: "Msg 7", Sequence: 7},
@@ -145,20 +158,22 @@ func TestGetContextPackage_PendingDelta(t *testing.T) {
 
 	messageRepo := &mockMessageRepo{
 		messages: map[string][]domain.Message{roomID: messages},
-		maxSeq:   8, // Max sequence is 8
+		maxSeq:   8,
 	}
 
 	memoryRepo := &mockMemoryRepo{}
 	openRouter := &mockOpenRouter{}
 	storage := &mockStorage{}
+	evalRepo := &mockEvalRepo{}
+	cfg := &config.Config{EvaluationSampleRate: 0}
 
-	u := NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouter, storage)
+	u := NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouter, storage, evalRepo, cfg)
 
 	req := domain.GetContextRequest{
 		Query: "hello",
 	}
 
-	pkg, err := u.GetContextPackage(context.Background(), tenantID, roomID, req)
+	pkg, err := u.GetContextPackage(context.Background(), projectID, roomID, req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -167,7 +182,6 @@ func TestGetContextPackage_PendingDelta(t *testing.T) {
 		t.Fatalf("expected context package to be non-nil")
 	}
 
-	// Verify that the limit calculation fetch works and returned all recent messages
 	if len(pkg.RelevantMessages) != 3 {
 		t.Errorf("expected 3 relevant messages, got %d", len(pkg.RelevantMessages))
 	}

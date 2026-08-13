@@ -25,7 +25,7 @@ func (b *EventBroker) Subscribe(roomID string) chan string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	ch := make(chan string, 100) // Buffering to avoid hanging on slow network clients
+	ch := make(chan string, 100)
 	b.subscribers[roomID] = append(b.subscribers[roomID], ch)
 	return ch
 }
@@ -57,7 +57,6 @@ func (b *EventBroker) Publish(roomID string, message string) {
 		select {
 		case sub <- message:
 		default:
-			// Client channel full, skip to avoid slow consumer blocking
 		}
 	}
 }
@@ -80,9 +79,9 @@ type logEventRequest struct {
 }
 
 func (h *EventHandler) LogEvent(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -99,12 +98,11 @@ func (h *EventHandler) LogEvent(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "event type cannot be empty"})
 	}
 
-	event, err := h.eventUsecase.LogEvent(c.Request().Context(), tenantID, roomID, req.Type, req.Payload)
+	event, err := h.eventUsecase.LogEvent(c.Request().Context(), projectID, roomID, req.Type, req.Payload)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	// Broadcast via SSE in real time
 	eventJSON, err := json.Marshal(event)
 	if err == nil {
 		h.broker.Publish(roomID, string(eventJSON))
@@ -114,9 +112,9 @@ func (h *EventHandler) LogEvent(c echo.Context) error {
 }
 
 func (h *EventHandler) StreamEvents(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -124,8 +122,7 @@ func (h *EventHandler) StreamEvents(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id parameter"})
 	}
 
-	// Double check room exists for this tenant before subscribing
-	_, err := h.eventUsecase.ListEvents(c.Request().Context(), tenantID, roomID, 1)
+	_, err := h.eventUsecase.ListEvents(c.Request().Context(), projectID, roomID, 1)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "room not found or unauthorized"})
 	}
@@ -138,7 +135,6 @@ func (h *EventHandler) StreamEvents(c echo.Context) error {
 	ch := h.broker.Subscribe(roomID)
 	defer h.broker.Unsubscribe(roomID, ch)
 
-	// Keep alive ticker to prevent connection termination
 	for {
 		select {
 		case msg, ok := <-ch:

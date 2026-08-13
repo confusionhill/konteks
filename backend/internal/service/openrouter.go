@@ -346,7 +346,7 @@ Output ONLY a valid JSON object matching this schema:
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer "+s.cfg.OpenRouterAPIKey))
+	req.Header.Set("Authorization", "Bearer "+s.cfg.OpenRouterAPIKey)
 
 	resp, err := s.client.Do(req)
 	if err != nil {

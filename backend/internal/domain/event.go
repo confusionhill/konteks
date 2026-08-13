@@ -16,6 +16,6 @@ type EventRepository interface {
 }
 
 type EventUsecase interface {
-	LogEvent(ctx context.Context, tenantID string, roomID string, eventType string, payload any) (*RoomEvent, error)
-	ListEvents(ctx context.Context, tenantID string, roomID string, limit int) ([]RoomEvent, error)
+	LogEvent(ctx context.Context, projectID string, roomID string, eventType string, payload any) (*RoomEvent, error)
+	ListEvents(ctx context.Context, projectID string, roomID string, limit int) ([]RoomEvent, error)
 }

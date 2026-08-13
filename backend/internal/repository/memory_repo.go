@@ -55,7 +55,7 @@ func stringToFloat32Array(s string) ([]float32, error) {
 
 func (r *memoryRepository) Create(ctx context.Context, memory *domain.Memory) error {
 	query := `
-		INSERT INTO memories (tenant_id, room_id, external_user_id, content, embedding, metadata)
+		INSERT INTO memories (project_id, room_id, external_user_id, content, embedding, metadata)
 		VALUES ($1, $2, $3, $4, $5::vector, $6)
 		RETURNING id, created_at
 	`
@@ -67,7 +67,7 @@ func (r *memoryRepository) Create(ctx context.Context, memory *domain.Memory) er
 	}
 	var ins Inserted
 	err := r.db.GetContext(ctx, &ins, query, 
-		memory.TenantID, 
+		memory.ProjectID, 
 		memory.RoomID, 
 		memory.ExternalUserID, 
 		memory.Content, 
@@ -91,7 +91,7 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 
 	if externalUserID != nil && *externalUserID != "" {
 		query = `
-			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at
 			FROM memories
 			WHERE room_id = $1 OR external_user_id = $2
 			ORDER BY ($4 * (1 - (embedding <=> $3::vector)) + $5 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
@@ -100,7 +100,7 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 		args = []any{roomID, *externalUserID, embeddingStr, semanticWeight, freshnessWeight, limit}
 	} else {
 		query = `
-			SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at
 			FROM memories
 			WHERE room_id = $1
 			ORDER BY ($3 * (1 - (embedding <=> $2::vector)) + $4 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
@@ -109,10 +109,9 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 		args = []any{roomID, embeddingStr, semanticWeight, freshnessWeight, limit}
 	}
 
-	// Dynamic scanning struct to capture vector as a text string first
 	type dbMemory struct {
 		ID             string  `db:"id"`
-		TenantID       string  `db:"tenant_id"`
+		ProjectID      string  `db:"project_id"`
 		RoomID         *string `db:"room_id"`
 		ExternalUserID *string `db:"external_user_id"`
 		Content        string  `db:"content"`
@@ -135,7 +134,7 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 		}
 		memories[i] = domain.Memory{
 			ID:             row.ID,
-			TenantID:       row.TenantID,
+			ProjectID:      row.ProjectID,
 			RoomID:         row.RoomID,
 			ExternalUserID: row.ExternalUserID,
 			Content:        row.Content,
@@ -149,13 +148,13 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 
 func (r *memoryRepository) ListByRoom(ctx context.Context, roomID string) ([]domain.Memory, error) {
 	query := `
-		SELECT id, tenant_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+		SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at
 		FROM memories
 		WHERE room_id = $1
 	`
 	type dbMemory struct {
 		ID             string  `db:"id"`
-		TenantID       string  `db:"tenant_id"`
+		ProjectID      string  `db:"project_id"`
 		RoomID         *string `db:"room_id"`
 		ExternalUserID *string `db:"external_user_id"`
 		Content        string  `db:"content"`
@@ -178,7 +177,7 @@ func (r *memoryRepository) ListByRoom(ctx context.Context, roomID string) ([]dom
 		}
 		memories[i] = domain.Memory{
 			ID:             row.ID,
-			TenantID:       row.TenantID,
+			ProjectID:      row.ProjectID,
 			RoomID:         row.RoomID,
 			ExternalUserID: row.ExternalUserID,
 			Content:        row.Content,

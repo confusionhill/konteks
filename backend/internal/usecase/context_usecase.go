@@ -8,15 +8,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
-	"math/rand"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dika/contextkit/backend/internal/config"
-
 	"github.com/dika/contextkit/backend/internal/domain"
 )
 
@@ -32,8 +31,9 @@ type contextUsecase struct {
 }
 
 type evalTask struct {
-	Query string
-	Pkg   *domain.ContextPackage
+	ProjectID string
+	Query     string
+	Pkg       *domain.ContextPackage
 }
 
 func NewContextUsecase(
@@ -56,7 +56,6 @@ func NewContextUsecase(
 		evalQueue:        make(chan evalTask, 1000),
 	}
 	
-	// Spawn background evaluation workers
 	for i := 0; i < 2; i++ {
 		go u.evaluationWorker()
 	}
@@ -74,6 +73,7 @@ func (u *contextUsecase) evaluationWorker() {
 		}
 		
 		eval.ID = uuid.NewString()
+		eval.ProjectID = task.ProjectID
 		eval.RoomID = task.Pkg.RoomID
 		if err := u.evalRepo.Create(ctx, eval); err != nil {
 			log.Printf("[Evaluation Worker Error]: failed to save evaluation: %v", err)
@@ -98,14 +98,12 @@ func decompressGzip(data []byte) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-// Zero-Latency Heuristic Intent Classifier (Sub-0.1ms Go string matching)
 func classifyStrategy(query string) string {
 	q := strings.ToLower(strings.TrimSpace(query))
 	if q == "" {
 		return "hybrid"
 	}
 
-	// Rule 1: Recall intent -> memory_heavy
 	recallKeywords := []string{"remember", "earlier", "previously", "last time", "past", "history", "preference", "my budget", "my favorite"}
 	for _, kw := range recallKeywords {
 		if strings.Contains(q, kw) {
@@ -113,7 +111,6 @@ func classifyStrategy(query string) string {
 		}
 	}
 
-	// Rule 2: Follow-up / pronoun reference -> recent_heavy
 	words := strings.Fields(q)
 	if len(words) < 5 {
 		return "recent_heavy"
@@ -126,7 +123,6 @@ func classifyStrategy(query string) string {
 		}
 	}
 
-	// Rule 3: Default -> hybrid
 	return "hybrid"
 }
 
@@ -139,16 +135,14 @@ func hasPronouns(query string) bool {
 			return true
 		}
 	}
-	// Short query under 3 words is highly likely to be a pronoun/follow-up reference
 	if len(strings.Fields(q)) <= 3 && q != "" {
 		return true
 	}
 	return false
 }
 
-func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string, roomID string, req domain.GetContextRequest) (*domain.ContextPackage, error) {
-	// 1. Verify room ownership
-	room, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
+func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string, roomID string, req domain.GetContextRequest) (*domain.ContextPackage, error) {
+	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +150,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		return nil, fmt.Errorf("room not found or unauthorized")
 	}
 
-	// Trigger Stage 1 Hydration if Room is Archived
 	if room.Status == domain.RoomStatusArchived {
 		log.Printf("[Context Engine]: Room %s is archived. Triggering Stage 1 Hydration...", roomID)
 		err = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
@@ -187,7 +180,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 			return nil, fmt.Errorf("failed to parse archive JSON: %w", err)
 		}
 
-		// Stage 1: Synchronously restore RoomState and last 3 messages
 		var stage1Msgs []domain.Message
 		var stage2Msgs []domain.Message
 		if len(payload.Messages) > 3 {
@@ -203,7 +195,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 			return nil, fmt.Errorf("failed to execute Stage 1 hydration: %w", err)
 		}
 
-		// Stage 2: Asynchronously backfill the rest in a background goroutine
 		go func() {
 			bgCtx := context.Background()
 			log.Printf("[Context Engine]: Spawning Stage 2 Backfill for room %s...", roomID)
@@ -218,13 +209,12 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		room.Status = domain.RoomStatusActive
 	}
 
-	// If room is hydrating, wait/block until active
 	if room.Status == domain.RoomStatusHydrating {
 		log.Printf("[Context Engine]: Room %s is currently hydrating. Blocking request...", roomID)
 		start := time.Now()
 		for {
 			time.Sleep(50 * time.Millisecond)
-			r, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
+			r, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 			if err == nil && r != nil && r.Status == domain.RoomStatusActive {
 				room = r
 				break
@@ -235,7 +225,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		}
 	}
 
-	// 2. Merge Policy Options
 	policy := req.Policy
 	if room.DefaultPolicy != nil {
 		if policy.MaxTokens <= 0 {
@@ -255,7 +244,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		}
 	}
 
-	// Apply global defaults if still unset
 	if policy.MaxTokens <= 0 {
 		policy.MaxTokens = 4000
 	}
@@ -266,7 +254,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		policy.FreshnessWeight = 0.5
 	}
 
-	// 3. Determine Strategy
 	strategy := policy.Strategy
 	if strategy == "" || strategy == "auto" {
 		strategy = classifyStrategy(req.Query)
@@ -286,12 +273,10 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		memLimit = 5
 	}
 
-	// Limit history by the MaxHistoryDepth policy constraint
 	if msgLimit > policy.MaxHistoryDepth {
 		msgLimit = policy.MaxHistoryDepth
 	}
 
-	// 4. Fetch RoomState
 	state, err := u.roomRepo.GetState(ctx, roomID)
 	if err != nil {
 		return nil, err
@@ -305,7 +290,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		}
 	}
 
-	// 5. Retrieve recent message history (Pending Delta Dynamic Fetching)
 	maxSeq, errMaxSeq := u.messageRepo.GetMaxSequence(ctx, roomID)
 	if errMaxSeq != nil {
 		maxSeq = 0
@@ -321,7 +305,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		history = []domain.Message{}
 	}
 
-	// 6-8. Execute LLM dependencies (Extraction, Embeddings, Pronouns)
 	var matchedMemories []domain.Memory
 	references := make(map[string]string)
 	entities := []domain.Entity{}
@@ -333,7 +316,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		var newSummary, activeTopic string
 		var extractedState []byte
 
-		// 6. Dynamic schema extraction override on-the-fly
 		if len(req.DynamicSchema) > 0 && string(req.DynamicSchema) != "null" && string(req.DynamicSchema) != "{}" {
 			g.Go(func() error {
 				log.Printf("[Context Engine]: dynamic schema provided. Performing on-the-fly state extraction...")
@@ -350,7 +332,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 			})
 		}
 
-		// 7. Search semantic memories
 		if req.Query != "" {
 			g.Go(func() error {
 				embedding, errEmbedding := u.openRouterClient.GenerateEmbedding(ctx, req.Query)
@@ -373,7 +354,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 			})
 		}
 
-		// 8. Smart-Sync Reference Resolution (Pronoun check)
 		var refSuccess bool
 		var resolvedRefs map[string]string
 		var resolvedEnts []domain.Entity
@@ -400,10 +380,8 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 			}
 		}
 
-		// Wait for all concurrent LLM calls to finish
 		_ = g.Wait()
 
-		// Apply concurrent results safely
 		needsSave := false
 		if extractSuccess {
 			state.Summary = newSummary
@@ -439,10 +417,8 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		parsedState = make(map[string]any)
 	}
 
-	// 9. Greedy Token Packing
 	budgetRemaining := policy.MaxTokens
 
-	// Essential elements: Summary & State
 	summaryTokens := len(state.Summary) / 4
 	stateTokens := len(string(state.State)) / 4
 	budgetRemaining -= (summaryTokens + stateTokens)
@@ -450,7 +426,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		budgetRemaining = 0
 	}
 
-	// Pack messages from newest to oldest
 	var packedMessages []domain.Message
 	for i := len(history) - 1; i >= 0; i-- {
 		msgTokens := len(history[i].Content) / 4
@@ -462,7 +437,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		}
 	}
 
-	// Pack memories from highest ranking to lowest
 	var packedMemories []domain.Memory
 	for _, mem := range matchedMemories {
 		memTokens := len(mem.Content) / 4
@@ -474,7 +448,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		}
 	}
 
-	// Final estimated tokens sum
 	estimatedTokens := summaryTokens + stateTokens
 	for _, m := range packedMessages {
 		estimatedTokens += len(m.Content) / 4
@@ -483,7 +456,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		estimatedTokens += len(mem.Content) / 4
 	}
 
-	// Tokens processed sum (everything scanned before truncation)
 	processedTokens := summaryTokens + stateTokens
 	for _, m := range history {
 		processedTokens += len(m.Content) / 4
@@ -506,11 +478,9 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, tenantID string,
 		TokensProcessed:  processedTokens,
 	}
 
-	// Async Context Evaluation based on sample rate
 	if u.cfg.EvaluationSampleRate > 0 && rand.Float64() <= u.cfg.EvaluationSampleRate {
 		select {
-		case u.evalQueue <- evalTask{Query: req.Query, Pkg: pkg}:
-			// Successfully queued
+		case u.evalQueue <- evalTask{ProjectID: projectID, Query: req.Query, Pkg: pkg}:
 		default:
 			log.Printf("[Context Usecase Warning]: eval queue is full, skipping evaluation")
 		}

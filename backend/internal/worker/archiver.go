@@ -46,12 +46,10 @@ func RunArchivalSweep(
 		log.Printf("[Archiver]: Starting room archival sweep for inactive rooms (> %v)...", inactiveDuration)
 	}
 
-	// Ensure destination bucket exists first
 	if err := storageProvider.EnsureBucketExists(ctx); err != nil {
 		return fmt.Errorf("failed to ensure archival S3 bucket: %w", err)
 	}
 
-	// 1. Query candidate rooms
 	rooms, err := roomRepo.ListRoomsForArchival(ctx, inactiveDuration, roomID)
 	if err != nil {
 		return fmt.Errorf("failed to list rooms for archival: %w", err)
@@ -65,16 +63,14 @@ func RunArchivalSweep(
 	log.Printf("[Archiver]: Found %d candidate room(s) for archival.", len(rooms))
 
 	for _, room := range rooms {
-		log.Printf("[Archiver]: Processing room %s (Tenant: %s)...", room.ID, room.TenantID)
+		log.Printf("[Archiver]: Processing room %s (Project: %s)...", room.ID, room.ProjectID)
 
-		// 2. Lock room status to archiving
 		err := roomRepo.UpdateStatus(ctx, room.ID, domain.RoomStatusArchiving)
 		if err != nil {
 			log.Printf("[Archiver Error]: failed to update room %s status to archiving: %v", room.ID, err)
 			continue
 		}
 
-		// 3. Compile Room State
 		state, err := roomRepo.GetState(ctx, room.ID)
 		if err != nil {
 			log.Printf("[Archiver Error]: failed to fetch state for room %s: %v. Rolling back status to active...", room.ID, err)
@@ -85,7 +81,6 @@ func RunArchivalSweep(
 			state = &domain.RoomState{RoomID: room.ID, State: json.RawMessage("{}")}
 		}
 
-		// 4. Retrieve chronological messages (limit 100,000 for full transcript)
 		messages, err := messageRepo.ListByRoom(ctx, room.ID, 100000, 0)
 		if err != nil {
 			log.Printf("[Archiver Error]: failed to list messages for room %s: %v. Rolling back status to active...", room.ID, err)
@@ -93,7 +88,6 @@ func RunArchivalSweep(
 			continue
 		}
 
-		// 5. Retrieve memories
 		memories, err := memoryRepo.ListByRoom(ctx, room.ID)
 		if err != nil {
 			log.Printf("[Archiver Error]: failed to list memories for room %s: %v. Rolling back status to active...", room.ID, err)
@@ -101,7 +95,6 @@ func RunArchivalSweep(
 			continue
 		}
 
-		// 6. Construct payload
 		payload := ArchivedRoomPayload{
 			RoomState: *state,
 			Messages:  messages,
@@ -115,7 +108,6 @@ func RunArchivalSweep(
 			continue
 		}
 
-		// 7. Compress JSON payload using gzip
 		compressed, err := compressGzip(jsonBytes)
 		if err != nil {
 			log.Printf("[Archiver Error]: failed to compress archive payload for room %s: %v. Rolling back status...", room.ID, err)
@@ -123,8 +115,7 @@ func RunArchivalSweep(
 			continue
 		}
 
-		// 8. Upload compressed object to S3 (MinIO)
-		s3Key := fmt.Sprintf("tenants/%s/rooms/%s_archive.json.gz", room.TenantID, room.ID)
+		s3Key := fmt.Sprintf("projects/%s/rooms/%s_archive.json.gz", room.ProjectID, room.ID)
 		path, err := storageProvider.PutObject(ctx, s3Key, compressed)
 		if err != nil {
 			log.Printf("[Archiver Error]: failed to upload archive to S3 for room %s: %v. Rolling back status...", room.ID, err)
@@ -132,7 +123,6 @@ func RunArchivalSweep(
 			continue
 		}
 
-		// 9. Execute transaction: purge logs and memories, update room to archived with path
 		err = roomRepo.ArchiveRoomTx(ctx, room.ID, path)
 		if err != nil {
 			log.Printf("[Archiver Error]: database transaction failed to archive room %s: %v. Rolling back status...", room.ID, err)

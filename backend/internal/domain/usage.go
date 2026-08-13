@@ -4,7 +4,7 @@ import "context"
 
 type UsageRecord struct {
 	ID           string  `db:"id" json:"id"`
-	TenantID     string  `db:"tenant_id" json:"tenant_id"`
+	ProjectID    string  `db:"project_id" json:"project_id"`
 	Endpoint     string  `db:"endpoint" json:"endpoint"`
 	RoomID       *string `db:"room_id" json:"room_id"`
 	TokensUsed   int     `db:"tokens_used" json:"tokens_used"`
@@ -23,7 +23,7 @@ type RoomMetrics struct {
 }
 
 type UsageSummary struct {
-	TenantID         string  `json:"tenant_id"`
+	ProjectID        string  `json:"project_id"`
 	TotalRooms       int     `json:"total_rooms"`
 	ActiveRooms      int     `json:"active_rooms"`
 	ArchivedRooms    int     `json:"archived_rooms"`
@@ -40,12 +40,12 @@ type UsageSummary struct {
 
 type UsageRepository interface {
 	Record(ctx context.Context, rec *UsageRecord) error
-	GetSummary(ctx context.Context, tenantID string) (*UsageSummary, error)
+	GetSummary(ctx context.Context, projectID string) (*UsageSummary, error)
 	GetRoomMetrics(ctx context.Context, roomID string) (*RoomMetrics, error)
 }
 
 type UsageUsecase interface {
-	RecordUsage(ctx context.Context, tenantID, endpoint string, roomID *string, tokensIn, tokensOut int) error
-	GetUsageSummary(ctx context.Context, tenantID string) (*UsageSummary, error)
+	RecordUsage(ctx context.Context, projectID, endpoint string, roomID *string, tokensIn, tokensOut int) error
+	GetUsageSummary(ctx context.Context, projectID string) (*UsageSummary, error)
 	GetRoomMetrics(ctx context.Context, roomID string) (*RoomMetrics, error)
 }

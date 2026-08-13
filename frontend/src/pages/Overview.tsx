@@ -5,9 +5,27 @@ import { StatCard } from '../components/StatCard';
 import { RoomTable } from '../components/RoomTable';
 import { StatCardSkeleton, TableSkeleton } from '../components/Skeleton';
 import { EmptyState } from '../components/EmptyState';
-import { Door, ChatCircleText, HardDrive, Lightning, Warning, CurrencyDollar, ArrowDownLeft, ArrowUpRight, MagnifyingGlass, SortAscending, SortDescending, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { useAuth } from '../context/AuthContext';
+import {
+  DoorOpen,
+  MessageSquare,
+  HardDrive,
+  Zap,
+  AlertTriangle,
+  DollarSign,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Search,
+  ArrowDownAZ,
+  ArrowUpAZ,
+  ChevronLeft,
+  ChevronRight,
+  Activity,
+  Layers,
+} from 'lucide-react';
 
 export const OverviewPage: React.FC = () => {
+  const { activeProject } = useAuth();
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [evalSummary, setEvalSummary] = useState<EvaluationSummary | null>(null);
   const [rooms, setRooms] = useState<RoomOverview[]>([]);
@@ -27,26 +45,30 @@ export const OverviewPage: React.FC = () => {
 
   useEffect(() => {
     async function loadDashboard() {
+      if (!activeProject) return;
       try {
         setLoading(true);
         setError(null);
         const [sumData, roomsResp, evalSumData] = await Promise.all([
           fetchSummary(),
           fetchRooms({ search, status, sortBy, sortOrder, page, limit, minMessages }),
-          fetchEvaluationSummary().catch(e => { console.error("Eval summary not available:", e); return null; })
+          fetchEvaluationSummary().catch((e) => {
+            console.error('Eval summary not available:', e);
+            return null;
+          }),
         ]);
         setSummary(sumData);
-        setRooms(roomsResp.rooms);
-        setTotalRooms(roomsResp.total);
+        setRooms(roomsResp.rooms || []);
+        setTotalRooms(roomsResp.total || 0);
         if (evalSumData) setEvalSummary(evalSumData);
-      } catch (err) {
+      } catch (err: any) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
       } finally {
         setLoading(false);
       }
     }
     loadDashboard();
-  }, [search, status, sortBy, sortOrder, page, minMessages]);
+  }, [activeProject?.id, search, status, sortBy, sortOrder, page, minMessages]);
 
   const handleReset = () => {
     setSearchQuery('');
@@ -59,30 +81,34 @@ export const OverviewPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 font-sans">
       {/* Page Title Header */}
       <div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-sans">
-          Project <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">Overview</span>
+        <div className="inline-flex items-center space-x-2 text-xs font-semibold text-indigo-400 bg-indigo-950/60 border border-indigo-500/30 px-3 py-1 rounded-full mb-3">
+          <Layers className="h-3.5 w-3.5" />
+          <span>Active Workspace: {activeProject?.name || 'Project'}</span>
+        </div>
+        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+          Project <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">Overview</span>
         </h1>
-        <p className="text-slate-500 text-sm mt-1 font-medium">
-          Monitor your active conversation rooms, memory usage, and context API calls.
+        <p className="text-slate-400 text-sm mt-1">
+          Monitor your active conversation rooms, vector memory storage, and API call usage metrics.
         </p>
       </div>
 
       {/* Error Banner */}
       {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-4 flex items-center gap-3 text-sm">
-          <Warning size={20} className="text-rose-600 shrink-0" />
+        <div className="bg-red-950/80 border border-red-500/50 text-red-200 rounded-2xl p-4 flex items-center space-x-3 text-xs">
+          <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
           <div>
-            <span className="font-bold">Error loading dashboard:</span> {error}. Ensure backend is running.
+            <strong className="font-bold">Error loading metrics:</strong> {error}. Make sure the backend server is running.
           </div>
         </div>
       )}
 
-      {/* Stat Cards Grid (Asymmetric layout per SKILL.MD guidelines: 2fr 1fr 1fr 1fr) */}
+      {/* Stat Cards Grid */}
       {loading && !summary ? (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
@@ -96,32 +122,32 @@ export const OverviewPage: React.FC = () => {
               <StatCard
                 label="Active Rooms"
                 value={summary.active_rooms || 0}
-                icon={<Door size={22} weight="duotone" />}
+                icon={<DoorOpen className="h-5 w-5" />}
                 highlighted={true}
-                subtext="Persistent contexts"
+                subtext="Persistent active contexts"
               />
               <StatCard
                 label="Archived Rooms"
                 value={summary.archived_rooms || 0}
-                icon={<Door size={22} weight="duotone" className="text-slate-400" />}
-                subtext="Cold storage"
+                icon={<DoorOpen className="h-5 w-5 opacity-60" />}
+                subtext="S3 cold storage"
               />
               <StatCard
                 label="Total Messages"
-                value={summary.total_messages}
-                icon={<ChatCircleText size={22} weight="duotone" />}
-                subtext="Logged in DB"
+                value={summary.total_messages || 0}
+                icon={<MessageSquare className="h-5 w-5" />}
+                subtext="Logged in Postgres"
               />
               <StatCard
                 label="Vector Memories"
-                value={summary.total_memories}
-                icon={<HardDrive size={22} weight="duotone" />}
+                value={summary.total_memories || 0}
+                icon={<HardDrive className="h-5 w-5" />}
                 subtext="pgvector embeddings"
               />
               <StatCard
                 label="API Calls"
-                value={summary.total_api_calls}
-                icon={<Lightning size={22} weight="duotone" />}
+                value={summary.total_api_calls || 0}
+                icon={<Zap className="h-5 w-5" />}
                 subtext="Tracked usage"
               />
             </div>
@@ -131,42 +157,42 @@ export const OverviewPage: React.FC = () => {
               <StatCard
                 label="Total Cost (USD)"
                 value={`$${(summary.total_cost_overall || 0).toFixed(6)}`}
-                icon={<CurrencyDollar size={22} weight="duotone" />}
+                icon={<DollarSign className="h-5 w-5 text-emerald-400" />}
                 subtext={`Ops: $${((summary.total_api_calls || 0) * 0.00001).toFixed(6)} | Proc: $${(summary.total_cost_input || 0).toFixed(6)}`}
               />
               <StatCard
                 label="Avg Tokens Processed"
                 value={Math.round(summary.avg_tokens_input || 0)}
-                icon={<ArrowDownLeft size={22} weight="duotone" />}
+                icon={<ArrowDownLeft className="h-5 w-5 text-indigo-400" />}
                 subtext="Scanned & ranked @ $0.07 / 1M"
               />
               <StatCard
                 label="Avg Tokens Delivered"
                 value={Math.round(summary.avg_tokens_output || 0)}
-                icon={<ArrowUpRight size={22} weight="duotone" />}
+                icon={<ArrowUpRight className="h-5 w-5 text-violet-400" />}
                 subtext="Delivered to Agent (Free)"
               />
             </div>
-            
+
             {/* Context Observability Row */}
             {evalSummary && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <StatCard
                   label="Avg Relevance"
-                  value={evalSummary.avg_relevance > 0 ? `${(evalSummary.avg_relevance * 100).toFixed(1)}%` : "N/A"}
-                  icon={<Lightning size={22} weight="duotone" className="text-amber-500" />}
+                  value={evalSummary.avg_relevance > 0 ? `${(evalSummary.avg_relevance * 100).toFixed(1)}%` : 'N/A'}
+                  icon={<Activity className="h-5 w-5 text-amber-400" />}
                   subtext={`${evalSummary.total_evaluations} evaluations`}
                 />
                 <StatCard
                   label="Avg Completeness"
-                  value={evalSummary.avg_completeness > 0 ? `${(evalSummary.avg_completeness * 100).toFixed(1)}%` : "N/A"}
-                  icon={<ChatCircleText size={22} weight="duotone" className="text-emerald-500" />}
+                  value={evalSummary.avg_completeness > 0 ? `${(evalSummary.avg_completeness * 100).toFixed(1)}%` : 'N/A'}
+                  icon={<MessageSquare className="h-5 w-5 text-emerald-400" />}
                   subtext="Context fullness"
                 />
                 <StatCard
                   label="Token Efficiency"
-                  value={evalSummary.avg_token_efficiency > 0 ? `${(evalSummary.avg_token_efficiency * 100).toFixed(1)}%` : "N/A"}
-                  icon={<HardDrive size={22} weight="duotone" className="text-blue-500" />}
+                  value={evalSummary.avg_token_efficiency > 0 ? `${(evalSummary.avg_token_efficiency * 100).toFixed(1)}%` : 'N/A'}
+                  icon={<HardDrive className="h-5 w-5 text-blue-400" />}
                   subtext="Signal vs Noise"
                 />
               </div>
@@ -178,14 +204,14 @@ export const OverviewPage: React.FC = () => {
       {/* Active Rooms Table Section */}
       <div className="space-y-4 pt-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Conversation Rooms</h2>
-          <span className="text-xs font-mono text-slate-500 font-medium">
+          <h2 className="text-xl font-bold text-white tracking-tight">Conversation Rooms</h2>
+          <span className="text-xs font-mono text-slate-400 font-medium">
             Found {totalRooms} rooms matching filters
           </span>
         </div>
 
         {/* Search, Sort, and Filter Controls */}
-        <div className="bg-surface rounded-xl border border-slate-100 shadow-soft p-4 space-y-4 md:space-y-0 md:flex md:items-center md:gap-4">
+        <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl border border-slate-800 p-4 space-y-4 md:space-y-0 md:flex md:items-center md:gap-4 shadow-xl">
           {/* Search Input */}
           <div className="flex-1 relative">
             <input
@@ -194,15 +220,15 @@ export const OverviewPage: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && setSearch(searchQuery)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 bg-white"
+              className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
-            <MagnifyingGlass size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             {/* Min Messages */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Min Msgs:</span>
+            <div className="flex items-center space-x-1.5 text-xs text-slate-400">
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Min Msgs:</span>
               <input
                 type="number"
                 min="0"
@@ -212,20 +238,20 @@ export const OverviewPage: React.FC = () => {
                   setMinMessages(Number(e.target.value) || 0);
                   setPage(1);
                 }}
-                className="w-16 px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 text-center font-mono bg-white"
+                className="w-16 px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 text-center font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             {/* Status Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status:</span>
+            <div className="flex items-center space-x-1.5 text-xs text-slate-400">
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Status:</span>
               <select
                 value={status}
                 onChange={(e) => {
                   setStatus(e.target.value);
                   setPage(1);
                 }}
-                className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
+                className="bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">All</option>
                 <option value="active">Active</option>
@@ -234,22 +260,21 @@ export const OverviewPage: React.FC = () => {
             </div>
 
             {/* Sort By */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Sort:</span>
+            <div className="flex items-center space-x-1.5 text-xs text-slate-400">
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Sort:</span>
               <select
                 value={sortBy}
                 onChange={(e) => {
                   setSortBy(e.target.value);
                   setPage(1);
                 }}
-                className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
+                className="bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="last_active_at">Last Active</option>
                 <option value="id">Room ID</option>
                 <option value="external_user_id">User ID</option>
                 <option value="active_topic">Topic</option>
                 <option value="message_count">Message Count</option>
-                <option value="total_cost">Total Cost</option>
               </select>
             </div>
 
@@ -259,10 +284,10 @@ export const OverviewPage: React.FC = () => {
                 setSortOrder(sortOrder === 'DESC' ? 'ASC' : 'DESC');
                 setPage(1);
               }}
-              className="p-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors bg-white"
+              className="p-2 border border-slate-800 rounded-xl text-slate-400 hover:text-slate-200 bg-slate-950 transition-colors"
               title={sortOrder === 'DESC' ? 'Descending' : 'Ascending'}
             >
-              {sortOrder === 'DESC' ? <SortDescending size={18} /> : <SortAscending size={18} />}
+              {sortOrder === 'DESC' ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
             </button>
 
             {/* Apply & Reset Buttons */}
@@ -271,13 +296,13 @@ export const OverviewPage: React.FC = () => {
                 setSearch(searchQuery);
                 setPage(1);
               }}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-soft"
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-indigo-600/20"
             >
               Apply
             </button>
             <button
               onClick={handleReset}
-              className="px-3 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-sm font-semibold transition-colors bg-white"
+              className="px-3 py-1.5 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl text-xs font-semibold transition-colors bg-slate-950"
             >
               Reset
             </button>
@@ -289,32 +314,32 @@ export const OverviewPage: React.FC = () => {
         ) : rooms.length > 0 ? (
           <div className="space-y-4">
             <RoomTable rooms={rooms} />
-            
+
             {/* Pagination Controls */}
             {totalRooms > limit && (
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 pt-4 gap-3 text-sm text-slate-600">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-t border-slate-800 pt-4 gap-3 text-xs text-slate-400">
                 <div>
-                  Showing <span className="font-semibold">{Math.min((page - 1) * limit + 1, totalRooms)}</span> to{' '}
-                  <span className="font-semibold">{Math.min(page * limit, totalRooms)}</span> of{' '}
-                  <span className="font-semibold">{totalRooms}</span> rooms
+                  Showing <span className="font-semibold text-slate-200">{Math.min((page - 1) * limit + 1, totalRooms)}</span> to{' '}
+                  <span className="font-semibold text-slate-200">{Math.min(page * limit, totalRooms)}</span> of{' '}
+                  <span className="font-semibold text-slate-200">{totalRooms}</span> rooms
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center space-x-3">
                   <button
                     onClick={() => setPage((p) => Math.max(p - 1, 1))}
                     disabled={page === 1}
-                    className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:hover:bg-transparent bg-white"
+                    className="p-1.5 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors disabled:opacity-40 bg-slate-950"
                   >
-                    <CaretLeft size={16} />
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-slate-200">
                     Page {page} of {Math.ceil(totalRooms / limit)}
                   </span>
                   <button
                     onClick={() => setPage((p) => Math.min(p + 1, Math.ceil(totalRooms / limit)))}
                     disabled={page === Math.ceil(totalRooms / limit)}
-                    className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:hover:bg-transparent bg-white"
+                    className="p-1.5 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors disabled:opacity-40 bg-slate-950"
                   >
-                    <CaretRight size={16} />
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
               </div>

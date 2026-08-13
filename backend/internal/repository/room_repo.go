@@ -21,7 +21,7 @@ func NewRoomRepository(db *sqlx.DB) domain.RoomRepository {
 	return &roomRepository{db: db}
 }
 
-func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+func (r *roomRepository) Create(ctx context.Context, projectID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -31,9 +31,9 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 	// Insert room
 	var room domain.Room
 	queryRoom := `
-		INSERT INTO rooms (tenant_id, external_user_id, state_schema, default_policy, status)
+		INSERT INTO rooms (project_id, external_user_id, state_schema, default_policy, status)
 		VALUES ($1, $2, $3, $4, 'active')
-		RETURNING id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+		RETURNING id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 	`
 	var schemaParam any = nil
 	if len(stateSchema) > 0 && string(stateSchema) != "null" {
@@ -47,7 +47,7 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 
 	type rawRoom struct {
 		ID             string         `db:"id"`
-		TenantID       string         `db:"tenant_id"`
+		ProjectID      string         `db:"project_id"`
 		ExternalUserID string         `db:"external_user_id"`
 		CreatedAt      string         `db:"created_at"`
 		UpdatedAt      string         `db:"updated_at"`
@@ -57,13 +57,13 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 		ArchiveS3Path  sql.NullString `db:"archive_s3_path"`
 	}
 	var rr rawRoom
-	err = tx.GetContext(ctx, &rr, queryRoom, tenantID, externalUserID, schemaParam, policyParam)
+	err = tx.GetContext(ctx, &rr, queryRoom, projectID, externalUserID, schemaParam, policyParam)
 	if err != nil {
 		return nil, err
 	}
 	room = domain.Room{
 		ID:             rr.ID,
-		TenantID:       rr.TenantID,
+		ProjectID:      rr.ProjectID,
 		ExternalUserID: rr.ExternalUserID,
 		CreatedAt:      rr.CreatedAt,
 		UpdatedAt:      rr.UpdatedAt,
@@ -99,15 +99,15 @@ func (r *roomRepository) Create(ctx context.Context, tenantID string, externalUs
 	return &room, nil
 }
 
-func (r *roomRepository) GetByID(ctx context.Context, tenantID string, roomID string) (*domain.Room, error) {
+func (r *roomRepository) GetByID(ctx context.Context, projectID string, roomID string) (*domain.Room, error) {
 	query := `
-		SELECT id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+		SELECT id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 		FROM rooms
-		WHERE tenant_id = $1 AND id = $2
+		WHERE project_id = $1 AND id = $2
 	`
 	type rawRoom struct {
 		ID             string         `db:"id"`
-		TenantID       string         `db:"tenant_id"`
+		ProjectID      string         `db:"project_id"`
 		ExternalUserID string         `db:"external_user_id"`
 		CreatedAt      string         `db:"created_at"`
 		UpdatedAt      string         `db:"updated_at"`
@@ -117,7 +117,7 @@ func (r *roomRepository) GetByID(ctx context.Context, tenantID string, roomID st
 		ArchiveS3Path  sql.NullString `db:"archive_s3_path"`
 	}
 	var rr rawRoom
-	err := r.db.GetContext(ctx, &rr, query, tenantID, roomID)
+	err := r.db.GetContext(ctx, &rr, query, projectID, roomID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Not found
@@ -126,7 +126,7 @@ func (r *roomRepository) GetByID(ctx context.Context, tenantID string, roomID st
 	}
 	room := domain.Room{
 		ID:             rr.ID,
-		TenantID:       rr.TenantID,
+		ProjectID:      rr.ProjectID,
 		ExternalUserID: rr.ExternalUserID,
 		CreatedAt:      rr.CreatedAt,
 		UpdatedAt:      rr.UpdatedAt,
@@ -147,10 +147,16 @@ func (r *roomRepository) GetByID(ctx context.Context, tenantID string, roomID st
 	return &room, nil
 }
 
-func (r *roomRepository) Delete(ctx context.Context, tenantID string, roomID string) error {
-	// First verify room belongs to tenant
+func (r *roomRepository) Delete(ctx context.Context, projectID string, roomID string) error {
+	// First verify room belongs to project
 	var count int
-	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM rooms WHERE tenant_id = $1 AND id = $2", tenantID, roomID)
+	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM rooms WHERE project_id = $1 AND id = $2", projectID, roomID)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return nil // Nothing to delete / unauthorized
+	}
 	if err != nil {
 		return err
 	}
@@ -250,7 +256,7 @@ func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomStat
 	return tx.Commit()
 }
 
-func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
+func (r *roomRepository) ListWithOverview(ctx context.Context, projectID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
 	// 1. Build ORDER BY safely to prevent SQL injection
 	allowedSortFields := map[string]string{
 		"id":               "id",
@@ -273,7 +279,7 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 
 	// 2. Build where conditions dynamically
 	queryConds := ""
-	args := []any{tenantID}
+	args := []any{projectID}
 	paramIdx := 2
 
 	if search != "" {
@@ -302,14 +308,14 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 				COALESCE(r.external_user_id, '') AS external_user_id,
 				COALESCE(rs.active_topic, '') AS active_topic,
 				COALESCE(mc.msg_count, 0) AS message_count,
-				r.tenant_id
+				r.project_id
 			FROM rooms r
 			LEFT JOIN room_state rs ON rs.room_id = r.id
 			LEFT JOIN (
 				SELECT room_id, COUNT(*) AS msg_count FROM messages GROUP BY room_id
 			) mc ON mc.room_id = r.id
 		)
-		SELECT COUNT(*) FROM room_metrics WHERE tenant_id = $1 %s
+		SELECT COUNT(*) FROM room_metrics WHERE project_id = $1 %s
 	`, queryConds)
 
 	var total int
@@ -330,7 +336,7 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 				COALESCE(uc.total_cost, 0) AS total_cost,
 				COALESCE(uc.avg_tokens, 0) AS avg_tokens_per_turn,
 				r.updated_at AS last_active_at,
-				r.tenant_id,
+				r.project_id,
 				r.status,
 				r.archive_s3_path
 			FROM rooms r
@@ -351,7 +357,7 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 		)
 		SELECT id, external_user_id, active_topic, message_count, total_tokens_used, total_cost, avg_tokens_per_turn, last_active_at, status, archive_s3_path
 		FROM room_metrics
-		WHERE tenant_id = $1 %s
+		WHERE project_id = $1 %s
 		ORDER BY %s %s
 		LIMIT $%d OFFSET $%d
 	`, queryConds, orderBy, dir, paramIdx, paramIdx+1)
@@ -367,7 +373,7 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 	return overviews, total, nil
 }
 
-func (r *roomRepository) Update(ctx context.Context, tenantID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+func (r *roomRepository) Update(ctx context.Context, projectID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -376,7 +382,7 @@ func (r *roomRepository) Update(ctx context.Context, tenantID string, roomID str
 
 	type rawRoom struct {
 		ID             string         `db:"id"`
-		TenantID       string         `db:"tenant_id"`
+		ProjectID      string         `db:"project_id"`
 		ExternalUserID string         `db:"external_user_id"`
 		CreatedAt      string         `db:"created_at"`
 		UpdatedAt      string         `db:"updated_at"`
@@ -389,11 +395,11 @@ func (r *roomRepository) Update(ctx context.Context, tenantID string, roomID str
 	// 1. Fetch current room values to build fallback values
 	var currentRaw rawRoom
 	queryFetch := `
-		SELECT id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+		SELECT id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 		FROM rooms
-		WHERE id = $1 AND tenant_id = $2
+		WHERE id = $1 AND project_id = $2
 	`
-	err = tx.GetContext(ctx, &currentRaw, queryFetch, roomID, tenantID)
+	err = tx.GetContext(ctx, &currentRaw, queryFetch, roomID, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -417,12 +423,12 @@ func (r *roomRepository) Update(ctx context.Context, tenantID string, roomID str
 	queryUpdate := `
 		UPDATE rooms
 		SET state_schema = $3, default_policy = $4, updated_at = NOW()
-		WHERE id = $1 AND tenant_id = $2
-		RETURNING id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+		WHERE id = $1 AND project_id = $2
+		RETURNING id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 	`
 
 	var rr rawRoom
-	err = tx.GetContext(ctx, &rr, queryUpdate, roomID, tenantID, schemaParam, policyParam)
+	err = tx.GetContext(ctx, &rr, queryUpdate, roomID, projectID, schemaParam, policyParam)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +440,7 @@ func (r *roomRepository) Update(ctx context.Context, tenantID string, roomID str
 	// Map back to domain.Room struct
 	room := &domain.Room{
 		ID:             rr.ID,
-		TenantID:       rr.TenantID,
+		ProjectID:      rr.ProjectID,
 		ExternalUserID: rr.ExternalUserID,
 		CreatedAt:      rr.CreatedAt,
 		UpdatedAt:      rr.UpdatedAt,
@@ -464,14 +470,14 @@ func (r *roomRepository) ListRoomsForArchival(ctx context.Context, inactiveDurat
 	var args []interface{}
 	if roomID != "" {
 		query = `
-			SELECT id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+			SELECT id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 			FROM rooms
 			WHERE id = $1 AND status = 'active'
 		`
 		args = []interface{}{roomID}
 	} else {
 		query = `
-			SELECT id, tenant_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+			SELECT id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 			FROM rooms
 			WHERE status = 'active' AND updated_at < $1
 		`
@@ -481,7 +487,7 @@ func (r *roomRepository) ListRoomsForArchival(ctx context.Context, inactiveDurat
 
 	type rawRoom struct {
 		ID             string         `db:"id"`
-		TenantID       string         `db:"tenant_id"`
+		ProjectID      string         `db:"project_id"`
 		ExternalUserID string         `db:"external_user_id"`
 		CreatedAt      string         `db:"created_at"`
 		UpdatedAt      string         `db:"updated_at"`
@@ -501,7 +507,7 @@ func (r *roomRepository) ListRoomsForArchival(ctx context.Context, inactiveDurat
 	for i, rr := range rawList {
 		room := domain.Room{
 			ID:             rr.ID,
-			TenantID:       rr.TenantID,
+			ProjectID:      rr.ProjectID,
 			ExternalUserID: rr.ExternalUserID,
 			CreatedAt:      rr.CreatedAt,
 			UpdatedAt:      rr.UpdatedAt,
@@ -620,13 +626,13 @@ func (r *roomRepository) HydrateRoomTx(ctx context.Context, roomID string, state
 	// 4. Insert Memories
 	if len(memories) > 0 {
 		queryMem := `
-			INSERT INTO memories (id, tenant_id, room_id, external_user_id, content, embedding, metadata, created_at)
+			INSERT INTO memories (id, project_id, room_id, external_user_id, content, embedding, metadata, created_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
 			ON CONFLICT (id) DO NOTHING
 		`
 		for _, mem := range memories {
 			vectorStr := float32SliceToVectorString(mem.Embedding)
-			_, err = tx.ExecContext(ctx, queryMem, mem.ID, mem.TenantID, mem.RoomID, mem.ExternalUserID, mem.Content, vectorStr, mem.Metadata)
+			_, err = tx.ExecContext(ctx, queryMem, mem.ID, mem.ProjectID, mem.RoomID, mem.ExternalUserID, mem.Content, vectorStr, mem.Metadata)
 			if err != nil {
 				return err
 			}

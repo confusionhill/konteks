@@ -56,61 +56,13 @@ func main() {
 	}
 	defer db.Close()
 
-	// 3. Programmatically Apply Database Schema Migrations
-	migrationFile := "db/migrations/000001_init.up.sql"
+	// 3. Programmatically Apply Consolidated Database Schema & Seed Data
+	migrationFile := "db/migrations/01_init.sql"
 	log.Printf("applying database migrations from %s...", migrationFile)
 	if err := runMigrations(db, migrationFile); err != nil {
 		log.Printf("migrations warning (continuing execution): %v", err)
 	} else {
-		log.Println("database migrations applied successfully.")
-	}
-
-	migrationFile2 := "db/migrations/000002_usage_metering.up.sql"
-	log.Printf("applying database migrations from %s...", migrationFile2)
-	if err := runMigrations(db, migrationFile2); err != nil {
-		log.Printf("migrations warning (continuing execution): %v", err)
-	} else {
-		log.Println("usage metering migration applied successfully.")
-	}
-
-	migrationFile3 := "db/migrations/000003_token_cost_tracking.up.sql"
-	log.Printf("applying database migrations from %s...", migrationFile3)
-	if err := runMigrations(db, migrationFile3); err != nil {
-		log.Printf("migrations warning (continuing execution): %v", err)
-	} else {
-		log.Println("token & cost tracking migration applied successfully.")
-	}
-
-	migrationFile4 := "db/migrations/000004_room_state_references.up.sql"
-	log.Printf("applying database migrations from %s...", migrationFile4)
-	if err := runMigrations(db, migrationFile4); err != nil {
-		log.Printf("migrations warning (continuing execution): %v", err)
-	} else {
-		log.Println("room state references migration applied successfully.")
-	}
-
-	migrationFile5 := "db/migrations/000005_room_policy_and_schema.up.sql"
-	log.Printf("applying database migrations from %s...", migrationFile5)
-	if err := runMigrations(db, migrationFile5); err != nil {
-		log.Printf("migrations warning (continuing execution): %v", err)
-	} else {
-		log.Println("room policy and schema migration applied successfully.")
-	}
-
-	migrationFile6 := "db/migrations/000006_room_archival_and_sequence.up.sql"
-	log.Printf("applying database migrations from %s...", migrationFile6)
-	if err := runMigrations(db, migrationFile6); err != nil {
-		log.Printf("migrations warning (continuing execution): %v", err)
-	} else {
-		log.Println("room archival and sequence migration applied successfully.")
-	}
-
-	migrationFile7 := "db/migrations/000007_context_evaluations.up.sql"
-	log.Printf("applying database migrations from %s...", migrationFile7)
-	if err := runMigrations(db, migrationFile7); err != nil {
-		log.Printf("migrations warning (continuing execution): %v", err)
-	} else {
-		log.Println("context evaluations migration applied successfully.")
+		log.Println("database migrations & seed data applied successfully.")
 	}
 
 	// 4. Initialize Core Repositories
@@ -128,7 +80,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to initialize S3 storage provider: %v", err)
 	}
-	// Ensure the bucket exists on server startup
 	if err := storageProvider.EnsureBucketExists(context.Background()); err != nil {
 		log.Printf("[Warning]: failed to ensure S3 bucket on startup: %v", err)
 	}
@@ -142,8 +93,10 @@ func main() {
 
 	// 7. Initialize Echo REST API Handlers
 	eventBroker := handler.NewEventBroker()
-	authMiddleware := handler.AuthMiddleware(authRepo)
+	authMiddleware := handler.AuthMiddleware(authRepo, cfg.JWTSecret)
 
+	authHandler := handler.NewAuthHandler(authRepo, cfg.JWTSecret)
+	projectHandler := handler.NewProjectHandler(authRepo, cfg.JWTSecret)
 	roomHandler := handler.NewRoomHandler(roomUsecase)
 	messageHandler := handler.NewMessageHandler(messageUsecase)
 	contextHandler := handler.NewContextHandler(contextUsecase)
@@ -156,8 +109,8 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodOptions},
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete, http.MethodOptions},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, "X-Project-ID", "X-API-Key"},
 	}))
 
 	// Liveness Probe Check
@@ -165,10 +118,26 @@ func main() {
 		return c.String(http.StatusOK, "OK")
 	})
 
-	// Authorized Routes V1
+	// Public Auth Routes
+	v1Auth := e.Group("/v1/auth")
+	v1Auth.POST("/register", authHandler.Register)
+	v1Auth.POST("/login", authHandler.Login)
+
+	// Protected Routes V1 (User JWT or Project API Key Required)
 	v1 := e.Group("/v1")
 	v1.Use(authMiddleware)
 	v1.Use(handler.UsageTrackingMiddleware(usageUsecase))
+
+	// Auth Me
+	v1.GET("/auth/me", authHandler.Me)
+
+	// Project & API Key Management
+	v1.GET("/projects", projectHandler.ListProjects)
+	v1.POST("/projects", projectHandler.CreateProject)
+	v1.DELETE("/projects/:project_id", projectHandler.DeleteProject)
+	v1.GET("/projects/:project_id/api-keys", projectHandler.ListAPIKeys)
+	v1.POST("/projects/:project_id/api-keys", projectHandler.CreateAPIKey)
+	v1.DELETE("/projects/:project_id/api-keys/:key_id", projectHandler.RevokeAPIKey)
 
 	// Rooms API
 	v1.POST("/rooms", roomHandler.CreateRoom)
@@ -197,7 +166,7 @@ func main() {
 
 	// 9. Bind Listeners & Listen
 	serverPort := fmt.Sprintf(":%d", cfg.Port)
-	log.Printf("konteks MVP backend listening on port %s...", serverPort)
+	log.Printf("konteks backend listening on port %s...", serverPort)
 	if err := e.Start(serverPort); err != nil {
 		log.Fatalf("server listener failure: %v", err)
 	}

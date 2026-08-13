@@ -15,10 +15,10 @@ func NewUsageUsecase(usageRepo domain.UsageRepository) domain.UsageUsecase {
 	return &usageUsecase{usageRepo: usageRepo}
 }
 
-func (u *usageUsecase) RecordUsage(ctx context.Context, tenantID, endpoint string, roomID *string, tokensIn, tokensOut int) error {
+func (u *usageUsecase) RecordUsage(ctx context.Context, projectID, endpoint string, roomID *string, tokensIn, tokensOut int) error {
 	costIn, costOut, costTotal := service.CalculateCost(tokensIn, tokensOut)
 	rec := &domain.UsageRecord{
-		TenantID:     tenantID,
+		ProjectID:    projectID,
 		Endpoint:     endpoint,
 		RoomID:       roomID,
 		TokensUsed:   tokensIn + tokensOut,
@@ -31,8 +31,8 @@ func (u *usageUsecase) RecordUsage(ctx context.Context, tenantID, endpoint strin
 	return u.usageRepo.Record(ctx, rec)
 }
 
-func (u *usageUsecase) GetUsageSummary(ctx context.Context, tenantID string) (*domain.UsageSummary, error) {
-	return u.usageRepo.GetSummary(ctx, tenantID)
+func (u *usageUsecase) GetUsageSummary(ctx context.Context, projectID string) (*domain.UsageSummary, error) {
+	return u.usageRepo.GetSummary(ctx, projectID)
 }
 
 func (u *usageUsecase) GetRoomMetrics(ctx context.Context, roomID string) (*domain.RoomMetrics, error) {

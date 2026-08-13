@@ -10,10 +10,10 @@ import (
 )
 
 type messageTask struct {
-	TenantID string
-	RoomID   string
-	Content  string
-	Sequence int64
+	ProjectID string
+	RoomID    string
+	Content   string
+	Sequence  int64
 }
 
 type messageUsecase struct {
@@ -41,7 +41,6 @@ func NewMessageUsecase(
 		taskQueue:        make(chan messageTask, 5000),
 	}
 
-	// Start 5 background worker goroutines
 	for i := 0; i < 5; i++ {
 		go mu.worker()
 	}
@@ -58,22 +57,19 @@ func (u *messageUsecase) worker() {
 func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 	ctx := context.Background()
 
-	// 1. Fetch room
-	room, err := u.roomRepo.GetByID(ctx, task.TenantID, task.RoomID)
+	room, err := u.roomRepo.GetByID(ctx, task.ProjectID, task.RoomID)
 	if err != nil || room == nil {
 		log.Printf("[Background Worker Error]: failed to retrieve room %s: %v", task.RoomID, err)
 		return
 	}
 
-	// 2. Generate embedding vector for the message content
 	log.Printf("[Background Worker]: generating embedding for room %s...", task.RoomID)
 	embedding, err := u.openRouterClient.GenerateEmbedding(ctx, task.Content)
 	if err != nil {
 		log.Printf("[Background Worker Embedding Error]: failed to generate embedding: %v", err)
 	} else {
-		// 3. Save embedding as a semantic Memory chunk
 		memory := &domain.Memory{
-			TenantID:  task.TenantID,
+			ProjectID: task.ProjectID,
 			RoomID:    &task.RoomID,
 			Content:   task.Content,
 			Embedding: embedding,
@@ -89,7 +85,6 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		}
 	}
 
-	// 4. Retrieve current room state and last 15 messages for LLM extraction
 	state, err := u.roomRepo.GetState(ctx, task.RoomID)
 	if err != nil {
 		log.Printf("[Background Worker State Fetch Error]: failed to fetch state: %v", err)
@@ -101,7 +96,6 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 
 	history, err := u.messageRepo.ListByRoom(ctx, task.RoomID, 15, 0)
 	if err == nil && len(history) > 0 {
-		// 5. Synchronously extract summary, active topic, and state payload
 		log.Printf("[Background Worker]: extracting topic, summary, and state variables...")
 		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(room.StateSchema))
 		if err != nil {
@@ -111,7 +105,6 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 			state.State = json.RawMessage(stateJSON)
 			state.LastSummarizedSeq = task.Sequence
 
-			// 6. Upsert state
 			if err := u.roomRepo.UpsertState(ctx, state); err != nil {
 				log.Printf("[Background Worker State Save Error]: failed to save state: %v", err)
 			} else {
@@ -121,9 +114,8 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 	}
 }
 
-func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roomID string, role string, content string) (*domain.Message, error) {
-	// 1. Verify room ownership
-	room, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
+func (u *messageUsecase) CreateMessage(ctx context.Context, projectID string, roomID string, role string, content string) (*domain.Message, error) {
+	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,12 +123,10 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 		return nil, fmt.Errorf("room not found or unauthorized")
 	}
 
-	// Parallel Pre-Warming if Room is Archived
 	if room.Status == domain.RoomStatusArchived {
 		log.Printf("[Message Usecase]: Room %s is archived. Starting Parallel Pre-Warming...", roomID)
 		_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
 
-		// Spawn Stage 1 Hydration & Save asynchronously
 		go func() {
 			bgCtx := context.Background()
 			archiveBytes, err := u.storageProvider.GetObject(bgCtx, *room.ArchiveS3Path)
@@ -176,7 +166,6 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 				return
 			}
 
-			// Save the new user message
 			msg := &domain.Message{
 				RoomID:  roomID,
 				Role:    role,
@@ -187,21 +176,19 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 			} else {
 				select {
 				case u.taskQueue <- messageTask{
-					TenantID: tenantID,
-					RoomID:   roomID,
-					Content:  content,
-					Sequence: msg.Sequence,
+					ProjectID: projectID,
+					RoomID:    roomID,
+					Content:   content,
+					Sequence:  msg.Sequence,
 				}:
 				default:
 				}
 			}
 
-			// Backfill Stage 2 in background
 			log.Printf("[Pre-Warming]: Stage 1 Hydrate complete. Spawning Stage 2 Backfill for room %s...", roomID)
 			_ = u.roomRepo.HydrateRoomTx(bgCtx, roomID, nil, stage2Msgs, payload.Memories)
 		}()
 
-		// Return optimistic message
 		msg := &domain.Message{
 			RoomID:  roomID,
 			Role:    role,
@@ -210,7 +197,6 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 		return msg, nil
 	}
 
-	// 2. Persist raw message
 	msg := &domain.Message{
 		RoomID:  roomID,
 		Role:    role,
@@ -220,13 +206,12 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 		return nil, err
 	}
 
-	// 3. Queue task for background processing
 	select {
 	case u.taskQueue <- messageTask{
-		TenantID: tenantID,
-		RoomID:   roomID,
-		Content:  content,
-		Sequence: msg.Sequence,
+		ProjectID: projectID,
+		RoomID:    roomID,
+		Content:   content,
+		Sequence:  msg.Sequence,
 	}:
 		log.Printf("[API]: Message persisted. Queued state update task for room %s (Sequence: %d).", roomID, msg.Sequence)
 	default:
@@ -236,9 +221,8 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, tenantID string, roo
 	return msg, nil
 }
 
-func (u *messageUsecase) ListMessages(ctx context.Context, tenantID string, roomID string, limit int, beforeSeq int64) ([]domain.Message, error) {
-	// Verify room ownership
-	room, err := u.roomRepo.GetByID(ctx, tenantID, roomID)
+func (u *messageUsecase) ListMessages(ctx context.Context, projectID string, roomID string, limit int, beforeSeq int64) ([]domain.Message, error) {
+	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 	if err != nil {
 		return nil, err
 	}

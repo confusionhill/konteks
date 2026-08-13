@@ -16,9 +16,9 @@ func NewContextHandler(contextUsecase domain.ContextUsecase) *ContextHandler {
 }
 
 func (h *ContextHandler) GetContextPackage(c echo.Context) error {
-	tenantID, ok := c.Get("tenant_id").(string)
-	if !ok {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant context not found"})
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
 	}
 
 	roomID := c.Param("room_id")
@@ -27,10 +27,9 @@ func (h *ContextHandler) GetContextPackage(c echo.Context) error {
 	}
 
 	var req domain.GetContextRequest
-	// For context fetch, body is optional. Bind if provided
 	_ = c.Bind(&req)
 
-	pkg, err := h.contextUsecase.GetContextPackage(c.Request().Context(), tenantID, roomID, req)
+	pkg, err := h.contextUsecase.GetContextPackage(c.Request().Context(), projectID, roomID, req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

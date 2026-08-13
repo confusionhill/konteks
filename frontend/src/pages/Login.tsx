@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Layers, ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('admin@admin.com');
@@ -33,9 +33,7 @@ export const Login: React.FC = () => {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md z-10 text-center mb-8">
         <div className="inline-flex items-center justify-center space-x-3 mb-4">
-          <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-button">
-            <Layers className="h-6 w-6 text-white" />
-          </div>
+          <img src="/konteksicon.svg" alt="konteks logo" className="h-12 w-12" />
           <span className="text-3xl font-extrabold text-slate-900 tracking-tight font-sans">konteks</span>
         </div>
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Sign in to your account</h2>

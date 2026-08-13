@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, type Project } from '../context/AuthContext';
-import { FolderPlus, Layers, Search, ArrowRight, Trash2, Calendar, ShieldCheck, Sparkles } from 'lucide-react';
+import { FolderPlus, Search, ArrowRight, Trash2, Calendar, ShieldCheck, Sparkles } from 'lucide-react';
 
 export const Projects: React.FC = () => {
   const { projects, selectProject, createProject, deleteProject, fetchProjects, user, logout } = useAuth();
@@ -69,9 +69,7 @@ export const Projects: React.FC = () => {
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-button">
-              <Layers className="h-5 w-5 text-white" />
-            </div>
+            <img src="/konteksicon.svg" alt="konteks logo" className="h-9 w-9 shrink-0" />
             <span className="text-xl font-bold tracking-tight text-slate-900">konteks</span>
             <span className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-indigo-100">
               Projects Hub
@@ -158,9 +156,7 @@ export const Projects: React.FC = () => {
                 <div>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-3">
-                      <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                        <Layers className="h-5 w-5" />
-                      </div>
+                      <img src="/konteksicon.svg" alt="konteks logo" className="h-10 w-10 shrink-0 group-hover:scale-105 transition-transform" />
                       <div>
                         <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
                           {proj.name}

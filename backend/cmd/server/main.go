@@ -139,7 +139,7 @@ func main() {
 	messageHandler := handler.NewMessageHandler(messageUsecase)
 	contextHandler := handler.NewContextHandler(contextUsecase)
 	eventHandler := handler.NewEventHandler(eventUsecase, eventBroker)
-	dashboardHandler := handler.NewDashboardHandler(usageUsecase, roomUsecase, messageUsecase, roomRepo)
+	dashboardHandler := handler.NewDashboardHandler(usageUsecase, roomUsecase, messageUsecase, roomRepo, storageProvider)
 
 	// 8. Initialize Echo HTTP Router
 	e := echo.New()
@@ -182,6 +182,7 @@ func main() {
 	v1.GET("/dashboard/summary", dashboardHandler.GetSummary)
 	v1.GET("/dashboard/rooms", dashboardHandler.ListRooms)
 	v1.GET("/dashboard/rooms/:room_id", dashboardHandler.GetRoomDetail)
+	v1.GET("/dashboard/rooms/:room_id/archive-url", dashboardHandler.GetArchiveURL)
 
 	// 9. Bind Listeners & Listen
 	serverPort := fmt.Sprintf(":%d", cfg.Port)

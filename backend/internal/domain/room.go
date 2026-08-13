@@ -43,7 +43,7 @@ type RoomRepository interface {
 	Delete(ctx context.Context, tenantID string, roomID string) error
 	GetState(ctx context.Context, roomID string) (*RoomState, error)
 	UpsertState(ctx context.Context, state *RoomState) error
-	ListWithOverview(ctx context.Context, tenantID string, search string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]RoomOverview, int, error)
+	ListWithOverview(ctx context.Context, tenantID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]RoomOverview, int, error)
 	ListRoomsForArchival(ctx context.Context, inactiveDuration time.Duration, roomID string) ([]Room, error)
 	UpdateStatus(ctx context.Context, roomID string, status string) error
 	ArchiveRoomTx(ctx context.Context, roomID string, archiveS3Path string) error
@@ -59,6 +59,8 @@ type RoomOverview struct {
 	TotalCost        float64 `db:"total_cost" json:"total_cost"`
 	AvgTokensPerTurn float64 `db:"avg_tokens_per_turn" json:"avg_tokens_per_turn"`
 	LastActiveAt     string  `db:"last_active_at" json:"last_active_at"`
+	Status           string  `db:"status" json:"status"`
+	ArchiveS3Path    *string `db:"archive_s3_path" json:"archive_s3_path,omitempty"`
 }
 
 type RoomUsecase interface {
@@ -66,5 +68,5 @@ type RoomUsecase interface {
 	GetRoomState(ctx context.Context, tenantID string, roomID string) (*RoomState, error)
 	UpdateRoom(ctx context.Context, tenantID string, roomID string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy) (*Room, error)
 	DeleteRoom(ctx context.Context, tenantID string, roomID string) error
-	ListRoomsOverview(ctx context.Context, tenantID string, search string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]RoomOverview, int, error)
+	ListRoomsOverview(ctx context.Context, tenantID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]RoomOverview, int, error)
 }

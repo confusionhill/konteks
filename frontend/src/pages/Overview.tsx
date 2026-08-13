@@ -17,6 +17,7 @@ export const OverviewPage: React.FC = () => {
   // Filter/Sort/Pagination state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [search, setSearch] = useState<string>('');
+  const [status, setStatus] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('last_active_at');
   const [sortOrder, setSortOrder] = useState<string>('DESC');
   const [minMessages, setMinMessages] = useState<number>(0);
@@ -30,7 +31,7 @@ export const OverviewPage: React.FC = () => {
         setError(null);
         const [sumData, roomsResp] = await Promise.all([
           fetchSummary(),
-          fetchRooms({ search, sortBy, sortOrder, page, limit, minMessages })
+          fetchRooms({ search, status, sortBy, sortOrder, page, limit, minMessages })
         ]);
         setSummary(sumData);
         setRooms(roomsResp.rooms);
@@ -42,11 +43,12 @@ export const OverviewPage: React.FC = () => {
       }
     }
     loadDashboard();
-  }, [search, sortBy, sortOrder, page, minMessages]);
+  }, [search, status, sortBy, sortOrder, page, minMessages]);
 
   const handleReset = () => {
     setSearchQuery('');
     setSearch('');
+    setStatus('');
     setSortBy('last_active_at');
     setSortOrder('DESC');
     setMinMessages(0);
@@ -82,17 +84,24 @@ export const OverviewPage: React.FC = () => {
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
+          <StatCardSkeleton />
         </div>
       ) : (
         summary && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <StatCard
                 label="Active Rooms"
-                value={summary.total_rooms}
+                value={summary.active_rooms || 0}
                 icon={<Door size={22} weight="duotone" />}
                 highlighted={true}
                 subtext="Persistent contexts"
+              />
+              <StatCard
+                label="Archived Rooms"
+                value={summary.archived_rooms || 0}
+                icon={<Door size={22} weight="duotone" className="text-slate-400" />}
+                subtext="Cold storage"
               />
               <StatCard
                 label="Total Messages"
@@ -142,7 +151,7 @@ export const OverviewPage: React.FC = () => {
       {/* Active Rooms Table Section */}
       <div className="space-y-4 pt-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Active Rooms</h2>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Conversation Rooms</h2>
           <span className="text-xs font-mono text-slate-500 font-medium">
             Found {totalRooms} rooms matching filters
           </span>
@@ -178,6 +187,23 @@ export const OverviewPage: React.FC = () => {
                 }}
                 className="w-16 px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 text-center font-mono bg-white"
               />
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status:</span>
+              <select
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
+              >
+                <option value="">All</option>
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+              </select>
             </div>
 
             {/* Sort By */}

@@ -29,9 +29,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <Link to="/dashboard" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary-600 to-secondary-600 flex items-center justify-center text-white shadow-button">
-                <Cpu size={20} weight="bold" />
-              </div>
+              <img src="/konteksicon.svg" alt="Konteks Logo" className="w-8 h-8 drop-shadow-sm" />
               <span className="font-extrabold text-xl tracking-tight text-slate-900 group-hover:text-primary-600 transition-colors">
                 konteks
               </span>

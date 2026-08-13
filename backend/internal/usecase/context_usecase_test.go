@@ -21,6 +21,9 @@ func (m *mockStorage) GetObject(ctx context.Context, key string) ([]byte, error)
 func (m *mockStorage) EnsureBucketExists(ctx context.Context) error {
 	return nil
 }
+func (m *mockStorage) GeneratePresignedURL(ctx context.Context, key string, lifetime time.Duration) (string, error) {
+	return "url", nil
+}
 
 // Mock RoomRepository
 type mockRoomRepo struct {
@@ -47,10 +50,10 @@ func (m *mockRoomRepo) UpsertState(ctx context.Context, state *domain.RoomState)
 	m.states[state.RoomID] = state
 	return nil
 }
-func (m *mockRoomRepo) ListWithOverview(ctx context.Context, tenantID string, search string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
+func (m *mockRoomRepo) ListWithOverview(ctx context.Context, tenantID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
 	return nil, 0, nil
 }
-func (m *mockRoomRepo) ListRoomsForArchival(ctx context.Context, inactiveDuration time.Duration) ([]domain.Room, error) {
+func (m *mockRoomRepo) ListRoomsForArchival(ctx context.Context, inactiveDuration time.Duration, roomID string) ([]domain.Room, error) {
 	return nil, nil
 }
 func (m *mockRoomRepo) UpdateStatus(ctx context.Context, roomID string, status string) error {

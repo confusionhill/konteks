@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	s3config "github.com/aws/aws-sdk-go-v2/config"
@@ -106,4 +107,21 @@ func (s *s3StorageProvider) EnsureBucketExists(ctx context.Context) error {
 		return fmt.Errorf("failed to check S3 bucket: %w", err)
 	}
 	return nil
+}
+
+func (s *s3StorageProvider) GeneratePresignedURL(ctx context.Context, key string, lifetime time.Duration) (string, error) {
+	presigner := s3.NewPresignClient(s.client)
+	
+	req, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = lifetime
+	})
+	
+	if err != nil {
+		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
+	}
+	
+	return req.URL, nil
 }

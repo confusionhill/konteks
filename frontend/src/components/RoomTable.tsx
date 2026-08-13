@@ -45,6 +45,15 @@ export const RoomTable: React.FC<RoomTableProps> = ({ rooms }) => {
                   <span className="bg-slate-100 group-hover:bg-indigo-100 text-slate-800 group-hover:text-primary-700 px-2 py-1 rounded transition-colors">
                     {room.id.substring(0, 18)}...
                   </span>
+                  {room.status && room.status !== 'active' && (
+                    <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      room.status === 'archived' ? 'bg-slate-100 text-slate-500' :
+                      room.status === 'archiving' ? 'bg-amber-100 text-amber-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {room.status}
+                    </span>
+                  )}
                 </td>
                 <td className="py-4 px-6 font-medium text-slate-800">
                   {room.active_topic ? (

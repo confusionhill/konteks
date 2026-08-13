@@ -1,6 +1,8 @@
 export interface UsageSummary {
   tenant_id: string;
   total_rooms: number;
+  active_rooms: number;
+  archived_rooms: number;
   total_messages: number;
   total_memories: number;
   total_api_calls: number;
@@ -21,6 +23,8 @@ export interface RoomOverview {
   total_cost?: number;
   avg_tokens_per_turn?: number;
   last_active_at: string;
+  status?: string;
+  archive_s3_path?: string;
 }
 
 export interface Message {
@@ -54,6 +58,8 @@ export interface RoomDetail {
     external_user_id: string;
     created_at: string;
     updated_at: string;
+    status?: string;
+    archive_s3_path?: string;
   };
   metrics?: {
     total_tokens: number;
@@ -92,6 +98,7 @@ export interface MessagesResponse {
 
 export async function fetchRooms(options?: {
   search?: string;
+  status?: string;
   sortBy?: string;
   sortOrder?: string;
   page?: number;
@@ -101,6 +108,7 @@ export async function fetchRooms(options?: {
   const params = new URLSearchParams();
   if (options) {
     if (options.search) params.append('search', options.search);
+    if (options.status) params.append('status', options.status);
     if (options.sortBy) params.append('sort_by', options.sortBy);
     if (options.sortOrder) params.append('sort_order', options.sortOrder);
     if (options.page) params.append('page', options.page.toString());
@@ -136,6 +144,14 @@ export async function fetchMessages(
   const res = await fetch(`/v1/rooms/${roomId}/messages?${params.toString()}`, { headers: getAuthHeaders() });
   if (!res.ok) {
     throw new Error(`Failed to fetch messages: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getArchiveDownloadUrl(roomId: string): Promise<{ url: string }> {
+  const res = await fetch(`/v1/dashboard/rooms/${roomId}/archive-url`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to generate archive download URL: ${res.statusText}`);
   }
   return res.json();
 }

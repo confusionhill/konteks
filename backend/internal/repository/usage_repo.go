@@ -38,6 +38,16 @@ func (r *usageRepository) GetSummary(ctx context.Context, tenantID string) (*dom
 	if err != nil {
 		return nil, err
 	}
+	err = r.db.GetContext(ctx, &summary.ActiveRooms,
+		`SELECT COUNT(*) FROM rooms WHERE tenant_id = $1 AND status = 'active'`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	err = r.db.GetContext(ctx, &summary.ArchivedRooms,
+		`SELECT COUNT(*) FROM rooms WHERE tenant_id = $1 AND status = 'archived'`, tenantID)
+	if err != nil {
+		return nil, err
+	}
 
 	// Count messages
 	err = r.db.GetContext(ctx, &summary.TotalMessages,

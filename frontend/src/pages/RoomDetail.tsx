@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { fetchRoomDetail, fetchMessages } from '../api/dashboard';
+import { fetchRoomDetail, fetchMessages, getArchiveDownloadUrl } from '../api/dashboard';
 import type { RoomDetail, Message } from '../api/dashboard';
 import { StatePanel } from '../components/StatePanel';
 import { MessageList } from '../components/MessageList';
 import { DetailSkeleton } from '../components/Skeleton';
-import { ArrowLeft, User, Calendar, Warning, CurrencyDollar, Coins, Lightning } from '@phosphor-icons/react';
+import { ArrowLeft, User, Calendar, Warning, CurrencyDollar, Coins, Lightning, DownloadSimple, Archive } from '@phosphor-icons/react';
 
 export const RoomDetailPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -15,6 +15,7 @@ export const RoomDetailPage: React.FC = () => {
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     async function loadRoom() {
@@ -53,6 +54,28 @@ export const RoomDetailPage: React.FC = () => {
     }
   };
 
+  const handleDownloadArchive = async () => {
+    if (!roomId) return;
+    try {
+      setDownloading(true);
+      setError(null);
+      const { url } = await getArchiveDownloadUrl(roomId);
+      
+      // Trigger download via temporary anchor
+      const a = document.createElement('a');
+      a.href = url;
+      // We cannot force filename for cross-origin presigned URLs reliably, but we can set download attribute
+      a.download = `${roomId}_archive.json.gz`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download archive');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Back Link */}
@@ -84,6 +107,15 @@ export const RoomDetailPage: React.FC = () => {
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-primary-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
                 Room Inspection
               </span>
+              {detail.room.status && detail.room.status !== 'active' && (
+                <span className={`ml-2 text-xs font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                  detail.room.status === 'archived' ? 'bg-slate-100 text-slate-500 border-slate-200' :
+                  detail.room.status === 'archiving' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                  'bg-blue-100 text-blue-700 border-blue-200'
+                }`}>
+                  {detail.room.status}
+                </span>
+              )}
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans mt-2">
                 {detail.room.id}
               </h1>
@@ -146,12 +178,38 @@ export const RoomDetailPage: React.FC = () => {
         detail && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <StatePanel state={detail.state} />
-            <MessageList 
-              messages={messages} 
-              hasMore={hasMore} 
-              onLoadMore={handleLoadMore} 
-              loadingMore={loadingMore} 
-            />
+            {detail.room.status === 'archived' ? (
+              <div className="bg-surface rounded-xl border border-slate-100 shadow-soft p-8 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-2 border border-slate-100">
+                  <Archive size={32} className="text-slate-400" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">Room Archived in Cold Storage</h3>
+                <p className="text-sm text-slate-500 max-w-sm">
+                  To minimize database costs, messages for this room have been zipped and moved to cold storage. 
+                </p>
+                <div className="pt-4">
+                  <button
+                    onClick={handleDownloadArchive}
+                    disabled={downloading}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-70 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
+                  >
+                    {downloading ? (
+                      <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin"></span>
+                    ) : (
+                      <DownloadSimple size={18} weight="bold" />
+                    )}
+                    {downloading ? 'Preparing Download...' : 'Download .json.gz Archive'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <MessageList 
+                messages={messages} 
+                hasMore={hasMore} 
+                onLoadMore={handleLoadMore} 
+                loadingMore={loadingMore} 
+              />
+            )}
           </div>
         )
       )}

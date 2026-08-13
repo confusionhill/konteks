@@ -250,7 +250,7 @@ func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomStat
 	return tx.Commit()
 }
 
-func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, search string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
+func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {
 	// 1. Build ORDER BY safely to prevent SQL injection
 	allowedSortFields := map[string]string{
 		"id":               "id",
@@ -279,6 +279,12 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 	if search != "" {
 		queryConds += fmt.Sprintf(" AND (id::text ILIKE $%d OR external_user_id ILIKE $%d OR active_topic ILIKE $%d)", paramIdx, paramIdx, paramIdx)
 		args = append(args, "%"+search+"%")
+		paramIdx++
+	}
+
+	if status != "" {
+		queryConds += fmt.Sprintf(" AND r.status = $%d", paramIdx)
+		args = append(args, status)
 		paramIdx++
 	}
 
@@ -324,7 +330,9 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 				COALESCE(uc.total_cost, 0) AS total_cost,
 				COALESCE(uc.avg_tokens, 0) AS avg_tokens_per_turn,
 				r.updated_at AS last_active_at,
-				r.tenant_id
+				r.tenant_id,
+				r.status,
+				r.archive_s3_path
 			FROM rooms r
 			LEFT JOIN room_state rs ON rs.room_id = r.id
 			LEFT JOIN (
@@ -341,7 +349,7 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, tenantID string, 
 				GROUP BY room_id
 			) uc ON uc.room_id = r.id
 		)
-		SELECT id, external_user_id, active_topic, message_count, total_tokens_used, total_cost, avg_tokens_per_turn, last_active_at
+		SELECT id, external_user_id, active_topic, message_count, total_tokens_used, total_cost, avg_tokens_per_turn, last_active_at, status, archive_s3_path
 		FROM room_metrics
 		WHERE tenant_id = $1 %s
 		ORDER BY %s %s

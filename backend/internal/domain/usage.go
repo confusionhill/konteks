@@ -25,6 +25,8 @@ type RoomMetrics struct {
 type UsageSummary struct {
 	TenantID         string  `json:"tenant_id"`
 	TotalRooms       int     `json:"total_rooms"`
+	ActiveRooms      int     `json:"active_rooms"`
+	ArchivedRooms    int     `json:"archived_rooms"`
 	TotalMessages    int     `json:"total_messages"`
 	TotalMemories    int     `json:"total_memories"`
 	TotalAPICalls    int     `json:"total_api_calls"`

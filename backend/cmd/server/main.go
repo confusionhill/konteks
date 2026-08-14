@@ -62,6 +62,7 @@ func main() {
 		"db/migrations/02_add_encryption_fields.sql",
 		"db/migrations/03_add_evaluation_encryption_fields.sql",
 		"db/migrations/04_add_room_description_and_parent.sql",
+		"db/migrations/05_add_artifacts.sql",
 	}
 	for _, migrationFile := range migrationFiles {
 		log.Printf("applying database migrations from %s...", migrationFile)
@@ -80,6 +81,7 @@ func main() {
 	eventRepo := repository.NewEventRepository(db)
 	usageRepo := repository.NewUsageRepository(db)
 	evalRepo := repository.NewEvaluationRepository(db)
+	artifactRepo := repository.NewArtifactRepository(db)
 
 	// 5. Initialize Services & Clients
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
@@ -93,9 +95,10 @@ func main() {
 	}
 
 	// 6. Initialize Business Logic Usecases
+	artifactUsecase := usecase.NewArtifactUsecase(artifactRepo, openRouterClient, storageProvider)
 	roomUsecase := usecase.NewRoomUsecase(roomRepo)
 	messageUsecase := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, cryptoService, cfg)
-	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, evalRepo, cryptoService, cfg)
+	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, evalRepo, cryptoService, cfg, artifactUsecase)
 	eventUsecase := usecase.NewEventUsecase(roomRepo, eventRepo)
 	usageUsecase := usecase.NewUsageUsecase(usageRepo)
 

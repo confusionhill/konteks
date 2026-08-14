@@ -67,6 +67,17 @@ func (s *s3StorageProvider) PutObject(ctx context.Context, key string, data []by
 	return key, nil
 }
 
+func (s *s3StorageProvider) DeleteObject(ctx context.Context, key string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete S3 object: %w", err)
+	}
+	return nil
+}
+
 func (s *s3StorageProvider) GetObject(ctx context.Context, key string) ([]byte, error) {
 	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),

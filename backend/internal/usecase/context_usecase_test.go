@@ -19,6 +19,9 @@ func (m *mockStorage) PutObject(ctx context.Context, key string, data []byte) (s
 func (m *mockStorage) GetObject(ctx context.Context, key string) ([]byte, error) {
 	return []byte("mocked"), nil
 }
+func (m *mockStorage) DeleteObject(ctx context.Context, key string) error {
+	return nil
+}
 func (m *mockStorage) EnsureBucketExists(ctx context.Context) error {
 	return nil
 }
@@ -177,7 +180,7 @@ func TestGetContextPackage_PendingDelta(t *testing.T) {
 	evalRepo := &mockEvalRepo{}
 	cfg := &config.Config{EvaluationSampleRate: 0}
 
-	u := NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouter, storage, evalRepo, nil, cfg)
+	u := NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouter, storage, evalRepo, nil, cfg, nil)
 
 	req := domain.GetContextRequest{
 		Query: "hello",

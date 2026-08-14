@@ -28,6 +28,7 @@ type contextUsecase struct {
 	storageProvider  domain.StorageProvider
 	evalRepo         domain.EvaluationRepository
 	cryptoService    service.CryptoService
+	artifactUsecase  domain.ArtifactUsecase
 	cfg              *config.Config
 	evalQueue        chan evalTask
 }
@@ -50,6 +51,7 @@ func NewContextUsecase(
 	evalRepo domain.EvaluationRepository,
 	cryptoService service.CryptoService,
 	cfg *config.Config,
+	artifactUsecase domain.ArtifactUsecase,
 ) domain.ContextUsecase {
 	u := &contextUsecase{
 		roomRepo:         roomRepo,
@@ -59,6 +61,7 @@ func NewContextUsecase(
 		storageProvider:  storageProvider,
 		evalRepo:         evalRepo,
 		cryptoService:    cryptoService,
+		artifactUsecase:  artifactUsecase,
 		cfg:              cfg,
 		evalQueue:        make(chan evalTask, 1000),
 	}
@@ -549,6 +552,20 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		}
 	}
 
+	var artifacts []domain.ArtifactContext
+	if u.artifactUsecase != nil {
+		artCtxs, errArt := u.artifactUsecase.RetrieveArtifactContext(ctx, projectID, roomID, req.Query, policy)
+		if errArt == nil && len(artCtxs) > 0 {
+			artifacts = artCtxs
+			for _, a := range artifacts {
+				artTokens := len(a.Content) / 4
+				estimatedTokens += artTokens
+				processedTokens += artTokens
+			}
+			strategy = strategy + "_with_artifacts"
+		}
+	}
+
 	pkg := &domain.ContextPackage{
 		RoomID:           roomID,
 		Summary:          state.Summary,
@@ -556,6 +573,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		State:            parsedState,
 		RelevantMessages: packedMessages,
 		Memories:         packedMemories,
+		Artifacts:        artifacts,
 		Entities:         entities,
 		References:       references,
 		ChildAgents:      childAgents,

@@ -22,6 +22,7 @@ import {
   Unlock,
 } from 'lucide-react';
 import { decryptAESGCM } from '../utils/crypto';
+import { RoomBlacklistPanel } from '../components/RoomBlacklistPanel';
 
 interface SnapshotSection {
   label: string;
@@ -569,6 +570,9 @@ export const RoomDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Room Memory Blacklist Exclusion Panel */}
+      {roomId && <RoomBlacklistPanel roomId={roomId} />}
     </div>
   );
 };

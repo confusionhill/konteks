@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  Brain,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -54,6 +55,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navTabs = [
     { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'Memory Artifacts', path: '/dashboard/artifacts', icon: Brain },
     { name: 'Logs', path: '/dashboard/logs', icon: MessageSquare },
     { name: 'API Keys', path: '/dashboard/api-keys', icon: Key },
     { name: 'Settings', path: '/dashboard/settings', icon: Settings },
@@ -61,6 +63,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   // Helper for Breadcrumbs
   const getBreadcrumbTitle = () => {
+    if (location.pathname.startsWith('/dashboard/artifacts')) return 'Memory Artifacts';
     if (location.pathname.startsWith('/dashboard/evaluations/')) return 'Evaluation Detail';
     if (location.pathname.startsWith('/dashboard/logs/')) return 'Log Inspection';
     if (location.pathname.startsWith('/dashboard/logs')) return 'Logs';

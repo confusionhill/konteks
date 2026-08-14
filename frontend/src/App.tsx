@@ -6,6 +6,7 @@ import { Register } from './pages/Register';
 import { Projects } from './pages/Projects';
 import { Layout } from './components/Layout';
 import { OverviewPage } from './pages/Overview';
+import { ArtifactsPage } from './pages/ArtifactsPage';
 import { LogsPage } from './pages/Logs';
 import { RoomDetailPage } from './pages/RoomDetail';
 import { EvaluationDetailPage } from './pages/EvaluationDetail';
@@ -77,6 +78,7 @@ function App() {
             }
           >
             <Route index element={<OverviewPage />} />
+            <Route path="artifacts" element={<ArtifactsPage />} />
             <Route path="logs" element={<LogsPage />} />
             <Route path="logs/:roomId" element={<RoomDetailPage />} />
             <Route path="evaluations/:evalId" element={<EvaluationDetailPage />} />

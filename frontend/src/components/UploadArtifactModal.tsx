@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { createArtifact } from '../api/artifacts';
 
@@ -103,8 +104,8 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto font-sans">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto font-sans">
       <div className="bg-white border border-slate-200/80 rounded-2xl max-w-2xl w-full p-6 shadow-lifted relative my-8">
         <button
           onClick={onClose}
@@ -241,6 +242,7 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

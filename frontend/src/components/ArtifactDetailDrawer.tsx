@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X, Edit3, Trash2, Link as LinkIcon, Database, HardDrive, Calendar } from 'lucide-react';
 import type { Artifact, KnowledgeGraph } from '../api/artifacts';
 
@@ -25,9 +26,10 @@ export const ArtifactDetailDrawer: React.FC<ArtifactDetailDrawerProps> = ({
   const outgoingLinks = (graph?.edges || []).filter((e) => e.source === artifact.id);
   const incomingLinks = (graph?.edges || []).filter((e) => e.target === artifact.id);
 
-  return (
+  // Render via React Portal directly into document.body to bypass parent stacking contexts
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex justify-end bg-slate-900/40 backdrop-blur-sm font-sans transition-opacity"
+      className="fixed inset-0 z-[9999] flex justify-end bg-slate-900/40 backdrop-blur-sm font-sans transition-opacity"
       onClick={onClose}
     >
       <div
@@ -153,6 +155,7 @@ export const ArtifactDetailDrawer: React.FC<ArtifactDetailDrawerProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

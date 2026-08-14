@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save, AlertCircle, Edit3 } from 'lucide-react';
 import type { Artifact } from '../api/artifacts';
 import { updateArtifact } from '../api/artifacts';
@@ -59,8 +60,8 @@ export const ArtifactEditorModal: React.FC<ArtifactEditorModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto font-sans">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto font-sans">
       <div className="bg-white border border-slate-200/80 rounded-2xl max-w-4xl w-full p-6 shadow-lifted relative my-8">
         <button
           onClick={onClose}
@@ -146,6 +147,7 @@ export const ArtifactEditorModal: React.FC<ArtifactEditorModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

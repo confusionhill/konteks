@@ -1,6 +1,6 @@
 import React from 'react';
 import type { RoomState } from '../api/dashboard';
-import { Sliders, Tag, FileText, Link as LinkIcon, ArrowRight } from 'lucide-react';
+import { Sliders, Tag, FileText } from 'lucide-react';
 
 interface StatePanelProps {
   state: RoomState | null;
@@ -28,7 +28,6 @@ export const StatePanel: React.FC<StatePanelProps> = ({ state }) => {
   };
 
   const stateVars = parseStateVars(state.state);
-  const references = state.references ? Object.entries(state.references) : [];
 
   return (
     <div className="bg-white rounded-xl border border-slate-200/80 shadow-soft p-6 space-y-6 font-sans">

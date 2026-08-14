@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { StatCard } from '../components/StatCard';
 import {
   fetchProjectLogs,
   fetchProjectEvaluations,
@@ -163,104 +164,73 @@ export const LogsPage: React.FC = () => {
       </div>
 
       {/* TOP EVALUATION QUALITY METRIC CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card 1: AVG RELEVANCE */}
-        <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-soft hover:shadow-lifted transition-all">
-          <div className="flex items-center space-x-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-            <Activity className="h-4 w-4 text-amber-500" />
-            <span>AVG RELEVANCE</span>
-          </div>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight mb-1">
-            {formatScore(evalSummary?.avg_relevance)}
-          </div>
-          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
-            <div
-              className="bg-indigo-600 h-full rounded-full transition-all"
-              style={{ width: `${(evalSummary?.avg_relevance || 0) * 100}%` }}
-            />
-          </div>
-          <span className="text-[11px] text-indigo-600 font-semibold">
-            {evalSummary?.total_evaluations || 0} evaluations
-          </span>
-        </div>
-
-        {/* Card 2: AVG COMPLETENESS */}
-        <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-soft hover:shadow-lifted transition-all">
-          <div className="flex items-center space-x-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <span>AVG COMPLETENESS</span>
-          </div>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight mb-1">
-            {formatScore(evalSummary?.avg_completeness)}
-          </div>
-          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
-            <div
-              className="bg-emerald-500 h-full rounded-full transition-all"
-              style={{ width: `${(evalSummary?.avg_completeness || 0) * 100}%` }}
-            />
-          </div>
-          <span className="text-[11px] text-indigo-600 font-semibold">Context fullness</span>
-        </div>
-
-        {/* Card 3: TOKEN EFFICIENCY */}
-        <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-soft hover:shadow-lifted transition-all">
-          <div className="flex items-center space-x-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-            <Cpu className="h-4 w-4 text-indigo-600" />
-            <span>TOKEN EFFICIENCY</span>
-          </div>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight mb-1">
-            {formatScore(evalSummary?.avg_token_efficiency)}
-          </div>
-          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
-            <div
-              className="bg-indigo-600 h-full rounded-full transition-all"
-              style={{ width: `${(evalSummary?.avg_token_efficiency || 0) * 100}%` }}
-            />
-          </div>
-          <span className="text-[11px] text-indigo-600 font-semibold">Signal vs Noise</span>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard
+          label="Avg Relevance"
+          value={formatScore(evalSummary?.avg_relevance)}
+          icon={<Activity className="h-5 w-5 text-emerald-600" />}
+          subtext={`${evalSummary?.total_evaluations || 0} evaluations`}
+          progress={evalSummary?.avg_relevance}
+          progressColor="bg-emerald-500"
+        />
+        <StatCard
+          label="Avg Completeness"
+          value={formatScore(evalSummary?.avg_completeness)}
+          icon={<CheckCircle2 className="h-5 w-5 text-indigo-600" />}
+          subtext="Context fullness"
+          progress={evalSummary?.avg_completeness}
+          progressColor="bg-indigo-600"
+        />
+        <StatCard
+          label="Token Efficiency"
+          value={formatScore(evalSummary?.avg_token_efficiency)}
+          icon={<Cpu className="h-5 w-5 text-violet-600" />}
+          subtext="Signal vs Noise"
+          progress={evalSummary?.avg_token_efficiency}
+          progressColor="bg-violet-600"
+        />
       </div>
 
-      {/* VIEW MODE TABS (Message Logs Stream vs Context Evaluations Log) */}
-      <div className="bg-white border border-slate-200/80 rounded-xl shadow-soft p-6 space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setActiveTab('messages')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'messages'
-                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-button'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span>Message Logs Stream</span>
-              <span className="ml-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px]">
-                {logsTotal}
-              </span>
-            </button>
+      {/* VIEW MODE TABS & LOG STREAM CARD */}
+      <div className="bg-white border border-slate-200/80 rounded-xl shadow-soft overflow-hidden">
+        {/* Header & Filter Controls Container */}
+        <div className="p-6 space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setActiveTab('messages')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'messages'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <MessageSquare className="h-4 w-4" />
+                <span>Message Logs Stream</span>
+                <span className="ml-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px]">
+                  {logsTotal}
+                </span>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('evaluations')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'evaluations'
-                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-button'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <FileText className="h-4 w-4" />
-              <span>Context Evaluations Log</span>
-              <span className="ml-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px]">
-                {evalsTotal}
-              </span>
-            </button>
+              <button
+                onClick={() => setActiveTab('evaluations')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'evaluations'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <FileText className="h-4 w-4" />
+                <span>Context Evaluations Log</span>
+                <span className="ml-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px]">
+                  {evalsTotal}
+                </span>
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* TAB 1: MESSAGE LOGS STREAM */}
-        {activeTab === 'messages' && (
-          <div className="space-y-4">
-            {/* Filter & Search Toolbar */}
+          {/* Filter & Search Toolbar (Only for messages tab) */}
+          {activeTab === 'messages' && (
             <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               {/* Content / General Search */}
               <div className="relative">
@@ -347,29 +317,33 @@ export const LogsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          )}
+        </div>
 
-            {/* Message Logs Table */}
+        {/* TAB 1: MESSAGE LOGS STREAM TABLE */}
+        {activeTab === 'messages' && (
+          <div>
             {logsLoading ? (
-              <div className="flex items-center justify-center py-16">
+              <div className="flex items-center justify-center py-16 border-t border-slate-200/80">
                 <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-2" />
                 <span className="text-xs text-slate-500">Loading project message logs...</span>
               </div>
             ) : logs.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl">
+              <div className="text-center py-12 border-t border-slate-200/80 bg-slate-50/50">
                 <p className="text-xs text-slate-400 italic">No message logs match your active search filters.</p>
               </div>
             ) : (
-              <div className="rounded-xl border border-slate-200/80 overflow-hidden shadow-soft">
-                <div className="overflow-x-auto">
+              <div>
+                <div className="border-t border-slate-200/80 overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                        <th className="py-3 px-4">Timestamp</th>
-                        <th className="py-3 px-4">Role</th>
-                        <th className="py-3 px-4">User ID</th>
-                        <th className="py-3 px-4">Room ID</th>
-                        <th className="py-3 px-4">Content</th>
-                        <th className="py-3 px-4 text-right">Tokens & Cost</th>
+                      <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="py-3.5 px-6">Timestamp</th>
+                        <th className="py-3.5 px-6">Role</th>
+                        <th className="py-3.5 px-6">User ID</th>
+                        <th className="py-3.5 px-6">Room ID</th>
+                        <th className="py-3.5 px-6">Content</th>
+                        <th className="py-3.5 px-6 text-right">Tokens & Cost</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
@@ -377,11 +351,11 @@ export const LogsPage: React.FC = () => {
                         const isUser = log.role === 'user';
                         return (
                           <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3.5 px-4 font-mono text-slate-500 whitespace-nowrap">
+                            <td className="py-3.5 px-6 font-mono text-slate-500 whitespace-nowrap">
                               {new Date(log.created_at).toLocaleString()}
                             </td>
 
-                            <td className="py-3.5 px-4 whitespace-nowrap">
+                            <td className="py-3.5 px-6 whitespace-nowrap">
                               <span
                                 className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
                                   isUser
@@ -394,11 +368,11 @@ export const LogsPage: React.FC = () => {
                               </span>
                             </td>
 
-                            <td className="py-3.5 px-4 font-medium text-slate-900 whitespace-nowrap">
+                            <td className="py-3.5 px-6 font-medium text-slate-900 whitespace-nowrap">
                               {log.external_user_id || '-'}
                             </td>
 
-                            <td className="py-3.5 px-4 whitespace-nowrap">
+                            <td className="py-3.5 px-6 whitespace-nowrap">
                               <Link
                                 to={`/dashboard/logs/${log.room_id}`}
                                 className="inline-flex items-center space-x-1 text-indigo-600 font-mono hover:underline font-semibold"
@@ -409,11 +383,11 @@ export const LogsPage: React.FC = () => {
                               </Link>
                             </td>
 
-                            <td className="py-3.5 px-4 text-slate-800 max-w-md truncate">
+                            <td className="py-3.5 px-6 text-slate-800 max-w-md truncate">
                               {log.content || <span className="italic text-slate-400">(No text content)</span>}
                             </td>
 
-                            <td className="py-3.5 px-4 text-right font-mono text-slate-600 whitespace-nowrap">
+                            <td className="py-3.5 px-6 text-right font-mono text-slate-600 whitespace-nowrap">
                               {log.tokens_input !== undefined || log.tokens_output !== undefined ? (
                                 <span className="inline-flex items-center space-x-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-[11px]">
                                   <Coins className="h-3 w-3 text-amber-500" />
@@ -433,7 +407,7 @@ export const LogsPage: React.FC = () => {
                 </div>
 
                 {/* Message Logs Pagination Bar */}
-                <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                <div className="px-6 py-3.5 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
                   <span>
                     Showing {logs.length} of {logsTotal} message logs
                   </span>
@@ -467,7 +441,7 @@ export const LogsPage: React.FC = () => {
 
         {/* TAB 2: CONTEXT EVALUATIONS LOG STREAM */}
         {activeTab === 'evaluations' && (
-          <div className="space-y-4">
+          <div className="px-6 pb-6 pt-0 space-y-4">
             {evalsLoading ? (
               <div className="flex items-center justify-center py-16">
                 <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-2" />
@@ -483,7 +457,7 @@ export const LogsPage: React.FC = () => {
                   <div
                     key={ev.id}
                     onClick={() => navigate(`/dashboard/evaluations/${ev.id}`)}
-                    className="group bg-white border border-slate-200/80 rounded-xl p-4 shadow-soft hover:shadow-lifted hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                    className="group bg-slate-50/60 border border-slate-200/80 rounded-xl p-4 hover:bg-white hover:shadow-soft hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                   >
                     {/* Left: Room Badge & Timestamp */}
                     <div className="flex items-center space-x-3">
@@ -506,7 +480,7 @@ export const LogsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Middle: Evaluation Scores Badges ([eval score]) */}
+                    {/* Middle: Evaluation Scores Badges */}
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="bg-emerald-50 text-emerald-700 font-semibold px-2.5 py-1 rounded-full text-[11px] border border-emerald-100">
                         RELEVANCE: {formatScore(ev.relevance_score)}
@@ -528,7 +502,7 @@ export const LogsPage: React.FC = () => {
                 ))}
 
                 {/* Evaluations Pagination Bar */}
-                <div className="px-4 py-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between text-xs text-slate-500">
+                <div className="px-4 py-3 bg-slate-50/80 border border-slate-200/80 rounded-xl flex items-center justify-between text-xs text-slate-500">
                   <span>
                     Showing {evaluations.length} of {evalsTotal} evaluations
                   </span>

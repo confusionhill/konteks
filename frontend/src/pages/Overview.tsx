@@ -21,6 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Activity,
+  CheckCircle2,
+  Cpu,
   Layers,
 } from 'lucide-react';
 
@@ -89,7 +91,7 @@ export const OverviewPage: React.FC = () => {
           <span>Active Workspace: {activeProject?.name || 'Project'}</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-          Project <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">Overview</span>
+          Project Overview
         </h1>
         <p className="text-slate-500 text-sm mt-1 font-medium">
           Monitor your active conversation rooms, vector memory storage, and API call usage metrics.
@@ -180,20 +182,26 @@ export const OverviewPage: React.FC = () => {
                 <StatCard
                   label="Avg Relevance"
                   value={evalSummary.avg_relevance > 0 ? `${(evalSummary.avg_relevance * 100).toFixed(1)}%` : 'N/A'}
-                  icon={<Activity className="h-5 w-5 text-amber-500" />}
+                  icon={<Activity className="h-5 w-5 text-emerald-600" />}
                   subtext={`${evalSummary.total_evaluations} evaluations`}
+                  progress={evalSummary.avg_relevance}
+                  progressColor="bg-emerald-500"
                 />
                 <StatCard
                   label="Avg Completeness"
                   value={evalSummary.avg_completeness > 0 ? `${(evalSummary.avg_completeness * 100).toFixed(1)}%` : 'N/A'}
-                  icon={<MessageSquare className="h-5 w-5 text-emerald-500" />}
+                  icon={<CheckCircle2 className="h-5 w-5 text-indigo-600" />}
                   subtext="Context fullness"
+                  progress={evalSummary.avg_completeness}
+                  progressColor="bg-indigo-600"
                 />
                 <StatCard
                   label="Token Efficiency"
                   value={evalSummary.avg_token_efficiency > 0 ? `${(evalSummary.avg_token_efficiency * 100).toFixed(1)}%` : 'N/A'}
-                  icon={<HardDrive className="h-5 w-5 text-blue-500" />}
+                  icon={<Cpu className="h-5 w-5 text-violet-600" />}
                   subtext="Signal vs Noise"
+                  progress={evalSummary.avg_token_efficiency}
+                  progressColor="bg-violet-600"
                 />
               </div>
             )}

@@ -4,6 +4,7 @@ import { fetchRoomDetail, fetchMessages, getArchiveDownloadUrl, fetchRoomEvaluat
 import type { RoomDetail, Message, ContextEvaluation } from '../api/dashboard';
 import { StatePanel } from '../components/StatePanel';
 import { MessageList } from '../components/MessageList';
+import { StatCard } from '../components/StatCard';
 import { DetailSkeleton } from '../components/Skeleton';
 import {
   ArrowLeft,
@@ -283,7 +284,7 @@ export const RoomDetailPage: React.FC = () => {
 
       {/* Header Info */}
       {detail?.room && (
-        <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-soft space-y-4">
+        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-soft space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
@@ -291,12 +292,13 @@ export const RoomDetailPage: React.FC = () => {
               </span>
               {detail.room.status && detail.room.status !== 'active' && (
                 <span
-                  className={`ml-2 text-xs font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${detail.room.status === 'archived'
-                    ? 'bg-slate-100 text-slate-500 border-slate-200'
-                    : detail.room.status === 'archiving'
+                  className={`ml-2 text-xs font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                    detail.room.status === 'archived'
+                      ? 'bg-slate-100 text-slate-500 border-slate-200'
+                      : detail.room.status === 'archiving'
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
                       : 'bg-blue-50 text-blue-700 border-blue-200'
-                    }`}
+                  }`}
                 >
                   {detail.room.status}
                 </span>
@@ -339,42 +341,24 @@ export const RoomDetailPage: React.FC = () => {
 
           {/* Per-Room Token & Cost Analytics Cards */}
           {detail.metrics && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100">
-              <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                    Est. Room Cost
-                  </div>
-                  <div className="text-base font-bold font-mono text-emerald-700 mt-0.5">
-                    ${(detail.metrics.total_cost || 0).toFixed(6)}
-                  </div>
-                </div>
-                <DollarSign className="h-5 w-5 text-emerald-600" />
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
+              <StatCard
+                label="Est. Room Cost"
+                value={`$${(detail.metrics.total_cost || 0).toFixed(6)}`}
+                icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
+              />
 
-              <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                    Avg Tokens / Turn
-                  </div>
-                  <div className="text-base font-bold font-mono text-slate-900 mt-0.5">
-                    {Math.round(detail.metrics.avg_tokens_per_turn || 0)}
-                  </div>
-                </div>
-                <Coins className="h-5 w-5 text-amber-500" />
-              </div>
+              <StatCard
+                label="Avg Tokens / Turn"
+                value={Math.round(detail.metrics.avg_tokens_per_turn || 0)}
+                icon={<Coins className="h-5 w-5 text-amber-500" />}
+              />
 
-              <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                    Total Room Tokens
-                  </div>
-                  <div className="text-base font-bold font-mono text-indigo-700 mt-0.5">
-                    {detail.metrics.total_tokens || 0}
-                  </div>
-                </div>
-                <Zap className="h-5 w-5 text-indigo-600" />
-              </div>
+              <StatCard
+                label="Total Room Tokens"
+                value={detail.metrics.total_tokens || 0}
+                icon={<Zap className="h-5 w-5 text-indigo-600" />}
+              />
             </div>
           )}
         </div>

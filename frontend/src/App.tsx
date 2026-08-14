@@ -6,7 +6,9 @@ import { Register } from './pages/Register';
 import { Projects } from './pages/Projects';
 import { Layout } from './components/Layout';
 import { OverviewPage } from './pages/Overview';
+import { LogsPage } from './pages/Logs';
 import { RoomDetailPage } from './pages/RoomDetail';
+import { EvaluationDetailPage } from './pages/EvaluationDetail';
 import { ApiKeys } from './pages/ApiKeys';
 import { Settings } from './pages/Settings';
 
@@ -75,8 +77,14 @@ function App() {
             }
           >
             <Route index element={<OverviewPage />} />
-            <Route path="rooms" element={<OverviewPage />} />
+            <Route path="logs" element={<LogsPage />} />
+            <Route path="logs/:roomId" element={<RoomDetailPage />} />
+            <Route path="evaluations/:evalId" element={<EvaluationDetailPage />} />
+
+            {/* Legacy Backward Compatibility Redirects */}
+            <Route path="rooms" element={<Navigate to="/dashboard/logs" replace />} />
             <Route path="rooms/:roomId" element={<RoomDetailPage />} />
+
             <Route path="api-keys" element={<ApiKeys />} />
             <Route path="settings" element={<Settings />} />
           </Route>

@@ -60,6 +60,19 @@ export interface Message {
   cost_total?: number;
 }
 
+export interface ProjectLogEntry {
+  id: string;
+  room_id: string;
+  external_user_id: string;
+  role: string;
+  content: string;
+  sequence: number;
+  created_at: string;
+  tokens_input?: number;
+  tokens_output?: number;
+  cost_total?: number;
+}
+
 export interface RoomState {
   room_id: string;
   summary: string;
@@ -146,6 +159,20 @@ export interface MessagesResponse {
   has_more: boolean;
 }
 
+export interface ProjectLogsResponse {
+  logs: ProjectLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ProjectEvaluationsResponse {
+  evaluations: ContextEvaluation[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export async function fetchRooms(options?: {
   search?: string;
   status?: string;
@@ -169,6 +196,60 @@ export async function fetchRooms(options?: {
   const res = await fetch(`/v1/dashboard/rooms${queryString}`, { headers: getAuthHeaders() });
   if (!res.ok) {
     throw new Error(`Failed to fetch rooms: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchProjectLogs(options?: {
+  roomId?: string;
+  externalUserId?: string;
+  search?: string;
+  role?: string;
+  sortBy?: string;
+  sortOrder?: string;
+  page?: number;
+  limit?: number;
+}): Promise<ProjectLogsResponse> {
+  const params = new URLSearchParams();
+  if (options) {
+    if (options.roomId) params.append('room_id', options.roomId);
+    if (options.externalUserId) params.append('external_user_id', options.externalUserId);
+    if (options.search) params.append('search', options.search);
+    if (options.role) params.append('role', options.role);
+    if (options.sortBy) params.append('sort_by', options.sortBy);
+    if (options.sortOrder) params.append('sort_order', options.sortOrder);
+    if (options.page) params.append('page', options.page.toString());
+    if (options.limit) params.append('limit', options.limit.toString());
+  }
+  const queryString = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`/v1/dashboard/logs${queryString}`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch project logs: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchProjectEvaluations(options?: {
+  page?: number;
+  limit?: number;
+}): Promise<ProjectEvaluationsResponse> {
+  const params = new URLSearchParams();
+  if (options) {
+    if (options.page) params.append('page', options.page.toString());
+    if (options.limit) params.append('limit', options.limit.toString());
+  }
+  const queryString = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`/v1/evaluations${queryString}`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch project evaluations: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchEvaluationDetail(evalId: string): Promise<ContextEvaluation> {
+  const res = await fetch(`/v1/evaluations/${evalId}`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch evaluation detail: ${res.statusText}`);
   }
   return res.json();
 }

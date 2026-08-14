@@ -71,7 +71,9 @@ type EvaluationSummary struct {
 
 type EvaluationRepository interface {
 	Create(ctx context.Context, eval *ContextEvaluation) error
+	GetByID(ctx context.Context, evalID string) (*ContextEvaluation, error)
 	GetByRoomID(ctx context.Context, roomID string) ([]ContextEvaluation, error)
+	GetByProjectID(ctx context.Context, projectID string, limit int, offset int) ([]ContextEvaluation, int, error)
 	GetSummary(ctx context.Context, projectID string) (*EvaluationSummary, error)
 }
 

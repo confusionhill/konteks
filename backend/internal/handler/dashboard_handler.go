@@ -230,3 +230,101 @@ func (h *DashboardHandler) GetRoomEvaluations(c echo.Context) error {
 		"evaluations": evals,
 	})
 }
+
+func (h *DashboardHandler) GetProjectLogs(c echo.Context) error {
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
+	}
+
+	roomID := c.QueryParam("room_id")
+	externalUserID := c.QueryParam("external_user_id")
+	search := c.QueryParam("search")
+	role := c.QueryParam("role")
+	sortBy := c.QueryParam("sort_by")
+	sortOrder := c.QueryParam("sort_order")
+
+	limitStr := c.QueryParam("limit")
+	limit := 20
+	if limitStr != "" {
+		if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
+			limit = val
+		}
+	}
+
+	pageStr := c.QueryParam("page")
+	page := 1
+	if pageStr != "" {
+		if val, err := strconv.Atoi(pageStr); err == nil && val > 0 {
+			page = val
+		}
+	}
+	offset := (page - 1) * limit
+
+	logs, total, err := h.messageUsecase.ListProjectLogs(
+		c.Request().Context(), projectID, roomID, externalUserID, search, role, sortBy, sortOrder, limit, offset,
+	)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"logs":  logs,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+func (h *DashboardHandler) GetProjectEvaluations(c echo.Context) error {
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
+	}
+
+	limitStr := c.QueryParam("limit")
+	limit := 20
+	if limitStr != "" {
+		if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
+			limit = val
+		}
+	}
+
+	pageStr := c.QueryParam("page")
+	page := 1
+	if pageStr != "" {
+		if val, err := strconv.Atoi(pageStr); err == nil && val > 0 {
+			page = val
+		}
+	}
+	offset := (page - 1) * limit
+
+	evals, total, err := h.evalRepo.GetByProjectID(c.Request().Context(), projectID, limit, offset)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if evals == nil {
+		evals = []domain.ContextEvaluation{}
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"evaluations": evals,
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+	})
+}
+
+func (h *DashboardHandler) GetEvaluationDetail(c echo.Context) error {
+	evalID := c.Param("eval_id")
+	if evalID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing eval_id"})
+	}
+
+	eval, err := h.evalRepo.GetByID(c.Request().Context(), evalID)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "evaluation not found"})
+	}
+
+	return c.JSON(http.StatusOK, eval)
+}

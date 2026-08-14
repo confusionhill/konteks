@@ -161,7 +161,10 @@ func main() {
 	v1.GET("/dashboard/rooms", dashboardHandler.ListRooms)
 	v1.GET("/dashboard/rooms/:room_id", dashboardHandler.GetRoomDetail)
 	v1.GET("/dashboard/rooms/:room_id/archive-url", dashboardHandler.GetArchiveURL)
+	v1.GET("/dashboard/logs", dashboardHandler.GetProjectLogs)
+	v1.GET("/evaluations", dashboardHandler.GetProjectEvaluations)
 	v1.GET("/evaluations/summary", dashboardHandler.GetEvaluationsSummary)
+	v1.GET("/evaluations/:eval_id", dashboardHandler.GetEvaluationDetail)
 	v1.GET("/rooms/:room_id/evaluations", dashboardHandler.GetRoomEvaluations)
 
 	// 9. Bind Listeners & Listen

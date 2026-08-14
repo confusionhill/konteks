@@ -235,3 +235,7 @@ func (u *messageUsecase) ListMessages(ctx context.Context, projectID string, roo
 
 	return u.messageRepo.ListByRoom(ctx, roomID, limit, beforeSeq)
 }
+
+func (u *messageUsecase) ListProjectLogs(ctx context.Context, projectID string, roomID string, externalUserID string, search string, role string, sortBy string, sortOrder string, limit int, offset int) ([]domain.ProjectLogEntry, int, error) {
+	return u.messageRepo.ListProjectLogs(ctx, projectID, roomID, externalUserID, search, role, sortBy, sortOrder, limit, offset)
+}

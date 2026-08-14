@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/jmoiron/sqlx"
@@ -24,7 +26,6 @@ func (r *messageRepository) Create(ctx context.Context, msg *domain.Message) err
 	}
 	defer tx.Rollback()
 
-	// Get next sequence value
 	var maxSeq int64
 	err = tx.GetContext(ctx, &maxSeq, "SELECT COALESCE(MAX(sequence), 0) FROM messages WHERE room_id = $1", msg.RoomID)
 	if err != nil {
@@ -34,23 +35,13 @@ func (r *messageRepository) Create(ctx context.Context, msg *domain.Message) err
 	msg.Sequence = maxSeq + 1
 
 	query := `
-		INSERT INTO messages (room_id, role, content, sequence, tokens_input, tokens_output, cost_total)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, created_at
+		INSERT INTO messages (id, room_id, role, content, sequence, tokens_input, tokens_output, cost_total)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
-	// To scan fields from RETURNING
-	type Inserted struct {
-		ID        string `db:"id"`
-		CreatedAt string `db:"created_at"`
-	}
-	var ins Inserted
-	err = tx.GetContext(ctx, &ins, query, msg.RoomID, msg.Role, msg.Content, msg.Sequence, msg.TokensInput, msg.TokensOutput, msg.CostTotal)
+	_, err = tx.ExecContext(ctx, query, msg.ID, msg.RoomID, msg.Role, msg.Content, msg.Sequence, msg.TokensInput, msg.TokensOutput, msg.CostTotal)
 	if err != nil {
 		return err
 	}
-
-	msg.ID = ins.ID
-	msg.CreatedAt = ins.CreatedAt
 
 	return tx.Commit()
 }
@@ -102,4 +93,90 @@ func (r *messageRepository) GetMaxSequence(ctx context.Context, roomID string) (
 		return 0, err
 	}
 	return maxSeq, nil
+}
+
+func (r *messageRepository) ListProjectLogs(ctx context.Context, projectID string, roomID string, externalUserID string, search string, role string, sortBy string, sortOrder string, limit int, offset int) ([]domain.ProjectLogEntry, int, error) {
+	allowedSorts := map[string]string{
+		"created_at": "m.created_at",
+		"cost_total": "COALESCE(m.cost_total, 0)",
+		"tokens":     "(COALESCE(m.tokens_input, 0) + COALESCE(m.tokens_output, 0))",
+	}
+
+	orderBy := "m.created_at"
+	if s, ok := allowedSorts[sortBy]; ok {
+		orderBy = s
+	}
+
+	dir := "DESC"
+	if strings.ToUpper(sortOrder) == "ASC" {
+		dir = "ASC"
+	}
+
+	queryConds := "WHERE r.project_id = $1"
+	args := []any{projectID}
+	paramIdx := 2
+
+	if roomID != "" {
+		queryConds += fmt.Sprintf(" AND m.room_id::text ILIKE $%d", paramIdx)
+		args = append(args, "%"+roomID+"%")
+		paramIdx++
+	}
+
+	if externalUserID != "" {
+		queryConds += fmt.Sprintf(" AND r.external_user_id ILIKE $%d", paramIdx)
+		args = append(args, "%"+externalUserID+"%")
+		paramIdx++
+	}
+
+	if role != "" {
+		queryConds += fmt.Sprintf(" AND m.role = $%d", paramIdx)
+		args = append(args, role)
+		paramIdx++
+	}
+
+	if search != "" {
+		queryConds += fmt.Sprintf(" AND (m.content ILIKE $%d OR m.room_id::text ILIKE $%d OR r.external_user_id ILIKE $%d)", paramIdx, paramIdx, paramIdx)
+		args = append(args, "%"+search+"%")
+		paramIdx++
+	}
+
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*) 
+		FROM messages m
+		JOIN rooms r ON r.id = m.room_id
+		%s
+	`, queryConds)
+
+	var total int
+	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+		return nil, 0, err
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT 
+			m.id,
+			m.room_id,
+			COALESCE(r.external_user_id, '') AS external_user_id,
+			m.role,
+			m.content,
+			m.sequence,
+			m.created_at,
+			m.tokens_input,
+			m.tokens_output,
+			m.cost_total
+		FROM messages m
+		JOIN rooms r ON r.id = m.room_id
+		%s
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d
+	`, queryConds, orderBy, dir, paramIdx, paramIdx+1)
+
+	args = append(args, limit, offset)
+
+	var logs []domain.ProjectLogEntry
+	if err := r.db.SelectContext(ctx, &logs, selectQuery, args...); err != nil {
+		return nil, 0, err
+	}
+
+	return logs, total, nil
 }

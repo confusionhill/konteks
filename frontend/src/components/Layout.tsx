@@ -54,15 +54,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navTabs = [
     { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Rooms', path: '/dashboard/rooms', icon: MessageSquare },
+    { name: 'Logs', path: '/dashboard/logs', icon: MessageSquare },
     { name: 'API Keys', path: '/dashboard/api-keys', icon: Key },
     { name: 'Settings', path: '/dashboard/settings', icon: Settings },
   ];
 
   // Helper for Breadcrumbs
   const getBreadcrumbTitle = () => {
-    if (location.pathname.startsWith('/dashboard/rooms/')) return 'Room Inspection';
-    if (location.pathname.startsWith('/dashboard/rooms')) return 'Rooms';
+    if (location.pathname.startsWith('/dashboard/evaluations/')) return 'Evaluation Detail';
+    if (location.pathname.startsWith('/dashboard/logs/')) return 'Log Inspection';
+    if (location.pathname.startsWith('/dashboard/logs')) return 'Logs';
+    if (location.pathname.startsWith('/dashboard/rooms/')) return 'Log Inspection';
+    if (location.pathname.startsWith('/dashboard/rooms')) return 'Logs';
     if (location.pathname.startsWith('/dashboard/api-keys')) return 'API Keys';
     if (location.pathname.startsWith('/dashboard/settings')) return 'Settings';
     return 'Overview';

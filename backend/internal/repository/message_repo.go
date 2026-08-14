@@ -35,10 +35,10 @@ func (r *messageRepository) Create(ctx context.Context, msg *domain.Message) err
 	msg.Sequence = maxSeq + 1
 
 	query := `
-		INSERT INTO messages (id, room_id, role, content, sequence, tokens_input, tokens_output, cost_total)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO messages (id, room_id, role, content, sequence, tokens_input, tokens_output, cost_total, is_encrypted, encryption_metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
-	_, err = tx.ExecContext(ctx, query, msg.ID, msg.RoomID, msg.Role, msg.Content, msg.Sequence, msg.TokensInput, msg.TokensOutput, msg.CostTotal)
+	_, err = tx.ExecContext(ctx, query, msg.ID, msg.RoomID, msg.Role, msg.Content, msg.Sequence, msg.TokensInput, msg.TokensOutput, msg.CostTotal, msg.IsEncrypted, msg.EncryptionMetadata)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func (r *messageRepository) ListByRoom(ctx context.Context, roomID string, limit
 	var args []any
 	if beforeSeq > 0 {
 		query = `
-			SELECT id, room_id, role, content, sequence, created_at, tokens_input, tokens_output, cost_total
+			SELECT id, room_id, role, content, sequence, created_at, tokens_input, tokens_output, cost_total, COALESCE(is_encrypted, false) AS is_encrypted, encryption_metadata
 			FROM messages
 			WHERE room_id = $1 AND sequence < $2
 			ORDER BY sequence DESC
@@ -60,7 +60,7 @@ func (r *messageRepository) ListByRoom(ctx context.Context, roomID string, limit
 		args = []any{roomID, beforeSeq, limit}
 	} else {
 		query = `
-			SELECT id, room_id, role, content, sequence, created_at, tokens_input, tokens_output, cost_total
+			SELECT id, room_id, role, content, sequence, created_at, tokens_input, tokens_output, cost_total, COALESCE(is_encrypted, false) AS is_encrypted, encryption_metadata
 			FROM messages
 			WHERE room_id = $1
 			ORDER BY sequence DESC
@@ -163,7 +163,9 @@ func (r *messageRepository) ListProjectLogs(ctx context.Context, projectID strin
 			m.created_at,
 			m.tokens_input,
 			m.tokens_output,
-			m.cost_total
+			m.cost_total,
+			COALESCE(m.is_encrypted, false) AS is_encrypted,
+			m.encryption_metadata
 		FROM messages m
 		JOIN rooms r ON r.id = m.room_id
 		%s

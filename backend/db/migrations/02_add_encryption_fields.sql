@@ -1,0 +1,12 @@
+-- Migration 02: Add optional payload encryption columns
+ALTER TABLE messages 
+ADD COLUMN IF NOT EXISTS is_encrypted BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS encryption_metadata JSONB DEFAULT NULL;
+
+ALTER TABLE room_state
+ADD COLUMN IF NOT EXISTS is_encrypted BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS encryption_metadata JSONB DEFAULT NULL;
+
+ALTER TABLE memories
+ADD COLUMN IF NOT EXISTS is_encrypted BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS encryption_metadata JSONB DEFAULT NULL;

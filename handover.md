@@ -24,20 +24,11 @@
 
 ---
 
-## 3. Database Consolidation & Schema (`01_init.sql`)
+## 3. Database Consolidation & Schema
 
-All legacy incremental migrations (`000001` to `000007`) have been consolidated into a single authoritative migration script:
-- **Location**: [01_init.sql](file:///Users/dika/Documents/github/contextkit/backend/db/migrations/01_init.sql)
-
-### Core DDL Highlights
-- **`users`**: User identity and bcrypt password hashes.
-- **`projects`**: Project metadata with `owner_id` and `deleted_at TIMESTAMP WITH TIME ZONE` for **safe soft-deletion**.
-- **`project_members` & `project_invitations`**: Multi-user team permissions and pending invite tracking.
-- **`api_keys`**: Cryptographic SHA-256 key hash storage (`key_hash`), prefix display (`key_prefix`), optional `expires_at`, and `revoked_at`.
-- **`rooms`**: Bound to `project_id`. Statuses: `active`, `archiving`, `archived`, `hydrating`.
-- **`messages`**: Chronological transcript with `role VARCHAR(50)` supporting custom user roles.
-- **`memories`**: PostgreSQL `pgvector(4096)` vector embeddings scoped by `project_id`.
-- **`room_state`**, **`room_events`**, **`usage_records`**, **`context_evaluations`**: Real-time state tracking, SSE streaming, usage metering, and automated context quality evaluations.
+Consolidated schema migrations in `backend/db/migrations/`:
+- **`01_init.sql`**: Authoritative core schema (`users`, `projects`, `project_members`, `api_keys`, `rooms`, `messages`, `memories` with `pgvector`, `room_state`, `room_events`, `usage_records`, `context_evaluations`).
+- **`02_add_encryption_fields.sql`**: Adds optional `is_encrypted BOOLEAN DEFAULT FALSE` and `encryption_metadata JSONB DEFAULT NULL` fields to `messages`, `room_state`, and `memories`.
 
 ---
 
@@ -50,31 +41,42 @@ Built with **React 19**, **React Router v7**, and **TailwindCSS** adhering to th
 2. `/register`: New user registration (creates user identity; redirects to project creation).
 3. `/projects`: Intermediary **Projects Hub** page where users pick an existing project workspace or create new projects.
 4. `/dashboard`: **Overview Tab** (real-time usage metrics, active rooms summary, evaluations).
-5. `/dashboard/rooms`: **Rooms Tab** (room list, search, status filter, pagination).
-6. `/dashboard/rooms/:roomId`: **Room Detail Page** (live message stream, JSON state editor, presigned archive download).
-7. `/dashboard/api-keys`: **API Keys Tab** (generate project secret keys, set expiration 7/30/90 days or lifetime, copy key modal, revoke key).
-8. `/dashboard/settings`: **Settings Tab** (Project UUID copy, safe soft delete project button).
+5. `/dashboard/logs`: **Logs Tab** (Main Logs & Context Intelligence Dashboard featuring top 3 evaluation metric cards `AVG RELEVANCE`, `AVG COMPLETENESS`, `TOKEN EFFICIENCY`, dual-view switcher for project-wide message logs stream and context evaluations log stream).
+6. `/dashboard/logs/:roomId`: **Dedicated Log Inspection Page** (live message stream, JSON state editor, presigned archive download).
+7. `/dashboard/evaluations/:evalId`: **Dedicated Context Evaluation Inspection Page** (full query text, score progress bars, AI reasoning breakdown, measured context snapshot JSON tree).
+8. `/dashboard/api-keys`: **API Keys Tab** (generate project secret keys, set expiration 7/30/90 days or lifetime, copy key modal, revoke key).
+9. `/dashboard/settings`: **Settings Tab** (Project UUID copy, safe soft delete project button).
 
 ---
 
-## 5. Security & BOLA Prevention
+## 5. Security, End-to-End Encryption & Privacy Masking
 
 - **Stateless 0ms DB Check**: The JWT token carries the list of authorized `projects` in its signed payload. When a user sends `X-Project-ID`, the middleware validates it against the token's claims instantly.
-- **Fallback Verification**: If a newly joined project is not yet in an older JWT token, the middleware seamlessly validates membership in PostgreSQL via `authRepo.IsUserProjectMemberOrOwner`.
-- **Key Hashing**: Raw secret API keys (`ck_live_...`) are shown **ONLY ONCE** upon creation and are stored securely as SHA-256 hashes (`key_hash`).
+- **Optional Payload Encryption**:
+  - API supports `"is_encrypted": true` and `"encryption_metadata": {"alg": "AES-256-GCM", "key_version": "v1", "nonce": "..."}`.
+  - Plaintext is **never** saved to disk/DB for encrypted messages.
+  - Ephemeral RAM processing runs state extraction and saves re-encrypted state blobs to PostgreSQL.
+- **Dashboard Privacy Masking**:
+  - Encrypted log items display a privacy badge: `🔒 Encrypted Message Payload (AES-256-GCM)`.
+  - Interactive **"Reveal / Decrypt"** button decrypts ciphertexts in-memory using native Web Crypto API (`window.crypto.subtle.decrypt`).
 
 ---
 
-## 6. How to Run & Verify locally
+## 6. How to Run & Verify Locally
 
 ### 1. Backend Server (Go)
 ```bash
 cd backend
-go test ./...       # Run all unit tests
+go test ./...       # Run unit tests
 go run cmd/server/main.go
 ```
 
-### 2. Frontend Web Dashboard (React + Vite)
+### 2. Python Sample App (`example/app.py`)
+```bash
+python example/app.py
+```
+
+### 3. Frontend Web Dashboard (React + Vite)
 ```bash
 cd frontend
 npm run build       # Build production bundle

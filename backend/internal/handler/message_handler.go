@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,8 +19,10 @@ func NewMessageHandler(messageUsecase domain.MessageUsecase) *MessageHandler {
 }
 
 type createMessageRequest struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role               string          `json:"role"`
+	Content            string          `json:"content"`
+	IsEncrypted        bool            `json:"is_encrypted"`
+	EncryptionMetadata json.RawMessage `json:"encryption_metadata,omitempty"`
 }
 
 func (h *MessageHandler) CreateMessage(c echo.Context) error {
@@ -49,7 +52,13 @@ func (h *MessageHandler) CreateMessage(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "content cannot be empty"})
 	}
 
-	msg, err := h.messageUsecase.CreateMessage(c.Request().Context(), projectID, roomID, req.Role, req.Content)
+	var encMetaStr *string
+	if len(req.EncryptionMetadata) > 0 && string(req.EncryptionMetadata) != "null" {
+		s := string(req.EncryptionMetadata)
+		encMetaStr = &s
+	}
+
+	msg, err := h.messageUsecase.CreateMessage(c.Request().Context(), projectID, roomID, req.Role, req.Content, req.IsEncrypted, encMetaStr)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

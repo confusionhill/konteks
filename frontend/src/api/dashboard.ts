@@ -58,6 +58,8 @@ export interface Message {
   tokens_input?: number;
   tokens_output?: number;
   cost_total?: number;
+  is_encrypted?: boolean;
+  encryption_metadata?: any;
 }
 
 export interface ProjectLogEntry {
@@ -71,6 +73,8 @@ export interface ProjectLogEntry {
   tokens_input?: number;
   tokens_output?: number;
   cost_total?: number;
+  is_encrypted?: boolean;
+  encryption_metadata?: any;
 }
 
 export interface RoomState {

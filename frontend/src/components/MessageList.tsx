@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { Message } from '../api/dashboard';
-import { Bot, User, Coins } from 'lucide-react';
+import { Bot, User, Coins, Lock, Unlock } from 'lucide-react';
+import { decryptAESGCM } from '../utils/crypto';
 
 interface MessageListProps {
   messages: Message[];
@@ -15,6 +16,9 @@ export const MessageList: React.FC<MessageListProps> = ({
   onLoadMore,
   loadingMore,
 }) => {
+  const [decryptedMap, setDecryptedMap] = useState<Record<string, string>>({});
+  const [decryptingId, setDecryptingId] = useState<string | null>(null);
+
   if (messages.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-soft p-6">
@@ -33,6 +37,34 @@ export const MessageList: React.FC<MessageListProps> = ({
       });
     } catch {
       return isoString;
+    }
+  };
+
+  const handleRevealPayload = async (msg: Message) => {
+    const key = prompt('Enter your Project Master Secret Key to decrypt message:');
+    if (!key) return;
+
+    setDecryptingId(msg.id);
+    try {
+      let nonce = '';
+      if (msg.encryption_metadata) {
+        let meta = msg.encryption_metadata;
+        if (typeof meta === 'string') {
+          try {
+            meta = JSON.parse(meta);
+          } catch {
+            meta = {};
+          }
+        }
+        nonce = meta.nonce || '';
+      }
+
+      const text = await decryptAESGCM(msg.content, nonce, key);
+      setDecryptedMap((prev) => ({ ...prev, [msg.id]: text }));
+    } catch (err: any) {
+      alert(err.message || 'Decryption failed');
+    } finally {
+      setDecryptingId(null);
     }
   };
 
@@ -60,7 +92,13 @@ export const MessageList: React.FC<MessageListProps> = ({
         {messages.map((msg, idx) => {
           const isUser = msg.role === 'user';
           const hasTokens = msg.tokens_input !== undefined || msg.tokens_output !== undefined;
-          const textContent = msg.content ? msg.content.trim() : '';
+          const isEncrypted = Boolean(msg.is_encrypted);
+          const isDecrypted = Boolean(decryptedMap[msg.id]);
+          const textContent = isDecrypted
+            ? decryptedMap[msg.id]
+            : isEncrypted
+            ? `🔒 Encrypted Message Payload (AES-256-GCM)`
+            : msg.content ? msg.content.trim() : '';
 
           return (
             <div
@@ -84,29 +122,48 @@ export const MessageList: React.FC<MessageListProps> = ({
                     <span>{msg.role}</span>
                   </span>
 
+                  {isEncrypted && (
+                    <span className="inline-flex items-center space-x-1 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+                      <Lock className="h-3 w-3 text-amber-600" />
+                      <span>Encrypted Payload</span>
+                    </span>
+                  )}
+
                   {hasTokens && (
                     <span className="inline-flex items-center space-x-1 text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                       <Coins className="h-3 w-3 text-amber-500" />
                       <span>
-                        {msg.tokens_input !== undefined ? `in: ${msg.tokens_input}` : ''}
-                        {msg.tokens_output !== undefined ? ` | out: ${msg.tokens_output}` : ''}
-                        {msg.cost_total !== undefined ? ` ($${msg.cost_total.toFixed(6)})` : ''}
+                        in:{msg.tokens_input || 0} out:{msg.tokens_output || 0}
                       </span>
                     </span>
                   )}
                 </div>
 
-                <span className="text-xs font-mono text-slate-400">
+                <span className="text-[11px] font-mono text-slate-400">
                   {formatTime(msg.created_at)}
                 </span>
               </div>
 
-              <div className="text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap pl-1 break-words">
-                {textContent ? (
-                  textContent
-                ) : (
-                  <span className="italic text-slate-400 text-xs">(No text content recorded)</span>
-                )}
+              <div className="text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap pl-1 break-words flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  {isEncrypted && !isDecrypted ? (
+                    <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-lg text-amber-900 font-mono text-xs flex items-center justify-between">
+                      <span>🔒 Encrypted Payload (AES-256-GCM)</span>
+                      <button
+                        onClick={() => handleRevealPayload(msg)}
+                        disabled={decryptingId === msg.id}
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-sans font-bold transition-all shadow-xs"
+                      >
+                        <Unlock className="h-3 w-3" />
+                        <span>{decryptingId === msg.id ? 'Decrypting...' : 'Reveal Payload'}</span>
+                      </button>
+                    </div>
+                  ) : textContent ? (
+                    textContent
+                  ) : (
+                    <span className="italic text-slate-400 text-xs">(No text content recorded)</span>
+                  )}
+                </div>
               </div>
             </div>
           );

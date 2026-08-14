@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/dika/contextkit/backend/internal/domain"
+	"github.com/google/uuid"
 )
 
 type messageTask struct {
@@ -117,7 +118,7 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 	}
 }
 
-func (u *messageUsecase) CreateMessage(ctx context.Context, projectID string, roomID string, role string, content string) (*domain.Message, error) {
+func (u *messageUsecase) CreateMessage(ctx context.Context, projectID string, roomID string, role string, content string, isEncrypted bool, encryptionMetadata *string) (*domain.Message, error) {
 	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 	if err != nil {
 		return nil, err
@@ -170,9 +171,12 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, projectID string, ro
 			}
 
 			msg := &domain.Message{
-				RoomID:  roomID,
-				Role:    role,
-				Content: content,
+				ID:                 uuid.New().String(),
+				RoomID:             roomID,
+				Role:               role,
+				Content:            content,
+				IsEncrypted:        isEncrypted,
+				EncryptionMetadata: encryptionMetadata,
 			}
 			if err := u.messageRepo.Create(bgCtx, msg); err != nil {
 				log.Printf("[Pre-Warming Error] failed to save message: %v", err)
@@ -193,17 +197,23 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, projectID string, ro
 		}()
 
 		msg := &domain.Message{
-			RoomID:  roomID,
-			Role:    role,
-			Content: content,
+			ID:                 uuid.New().String(),
+			RoomID:             roomID,
+			Role:               role,
+			Content:            content,
+			IsEncrypted:        isEncrypted,
+			EncryptionMetadata: encryptionMetadata,
 		}
 		return msg, nil
 	}
 
 	msg := &domain.Message{
-		RoomID:  roomID,
-		Role:    role,
-		Content: content,
+		ID:                 uuid.New().String(),
+		RoomID:             roomID,
+		Role:               role,
+		Content:            content,
+		IsEncrypted:        isEncrypted,
+		EncryptionMetadata: encryptionMetadata,
 	}
 	if err := u.messageRepo.Create(ctx, msg); err != nil {
 		return nil, err

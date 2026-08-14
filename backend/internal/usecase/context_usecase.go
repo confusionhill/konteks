@@ -365,9 +365,30 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		msgLimit = policy.MaxHistoryDepth
 	}
 
-	state, err := u.roomRepo.GetState(ctx, roomID)
-	if err != nil {
-		return nil, err
+	// Parallel DB fetch: GetState and GetMaxSequence have no dependency on each other
+	var state *domain.RoomState
+	var maxSeq int64
+	{
+		var dbGroup errgroup.Group
+		dbGroup.Go(func() error {
+			s, errState := u.roomRepo.GetState(ctx, roomID)
+			if errState != nil {
+				return errState
+			}
+			state = s
+			return nil
+		})
+		dbGroup.Go(func() error {
+			seq, errSeq := u.messageRepo.GetMaxSequence(ctx, roomID)
+			if errSeq != nil {
+				seq = 0
+			}
+			maxSeq = seq
+			return nil
+		})
+		if err := dbGroup.Wait(); err != nil {
+			return nil, err
+		}
 	}
 	if state == nil {
 		state = &domain.RoomState{
@@ -378,10 +399,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		}
 	}
 
-	maxSeq, errMaxSeq := u.messageRepo.GetMaxSequence(ctx, roomID)
-	if errMaxSeq != nil {
-		maxSeq = 0
-	}
 	pendingCount := maxSeq - state.LastSummarizedSeq
 	finalMsgLimit := msgLimit
 	if pendingCount > int64(finalMsgLimit) {
@@ -430,7 +447,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		if len(req.DynamicSchema) > 0 && string(req.DynamicSchema) != "null" && string(req.DynamicSchema) != "{}" {
 			g.Go(func() error {
 				log.Printf("[Context Engine]: dynamic schema provided. Performing on-the-fly state extraction...")
-				sum, topic, extState, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(req.DynamicSchema))
+				sum, topic, extState, _, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(req.DynamicSchema))
 				if errExtract != nil {
 					log.Printf("[Context Engine State Extraction Error]: %v", errExtract)
 				} else {

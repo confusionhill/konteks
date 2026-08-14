@@ -1,6 +1,8 @@
 package usecase
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -72,25 +74,33 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		return
 	}
 
-	log.Printf("[Background Worker]: generating embedding for room %s...", task.RoomID)
-	embedding, err := u.openRouterClient.GenerateEmbedding(ctx, task.Content)
-	if err != nil {
-		log.Printf("[Background Worker Embedding Error]: failed to generate embedding: %v", err)
-	} else {
-		memory := &domain.Memory{
-			ProjectID: task.ProjectID,
-			RoomID:    &task.RoomID,
-			Content:   task.Content,
-			Embedding: embedding,
-			Metadata:  "{}",
-		}
-		if room.ExternalUserID != "" {
-			memory.ExternalUserID = &room.ExternalUserID
-		}
-		if err := u.memoryRepo.Create(ctx, memory); err != nil {
-			log.Printf("[Background Worker Memory Save Error]: failed to save memory: %v", err)
+	isLargeMessage := len(task.Content) > 2000
+
+	if isLargeMessage {
+		if isSpam(task.Content) {
+			log.Printf("[Background Worker]: Message is large but flagged as spam/repetitive (len: %d). Skipping embeddings.", len(task.Content))
 		} else {
-			log.Printf("[Background Worker]: successfully saved semantic memory chunk.")
+			log.Printf("[Background Worker]: Message is large (len: %d). Bypassing LLM fact extraction and chunking directly...", len(task.Content))
+			chunks := chunkText(task.Content, 2000, 200)
+			for i, chunk := range chunks {
+				embedding, errEmb := u.openRouterClient.GenerateEmbedding(ctx, chunk)
+				if errEmb != nil {
+					log.Printf("[Background Worker Embedding Error]: failed to embed chunk %d: %v", i, errEmb)
+					continue
+				}
+				memory := &domain.Memory{
+					ProjectID: task.ProjectID,
+					RoomID:    &task.RoomID,
+					Content:   chunk,
+					Embedding: embedding,
+					Metadata:  "{}",
+				}
+				if room.ExternalUserID != "" {
+					memory.ExternalUserID = &room.ExternalUserID
+				}
+				_ = u.memoryRepo.Create(ctx, memory)
+			}
+			log.Printf("[Background Worker]: Successfully embedded %d chunks for large message.", len(chunks))
 		}
 	}
 
@@ -126,12 +136,16 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 					decryptedHistory[i].Content = decrypted
 				}
 			}
+			
+			if len(decryptedHistory[i].Content) > 1000 {
+				decryptedHistory[i].Content = decryptedHistory[i].Content[:1000] + "...[Truncated due to length]"
+			}
 		}
 
-		log.Printf("[Background Worker]: extracting topic, summary, and state variables...")
-		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(room.StateSchema))
-		if err != nil {
-			log.Printf("[Background Worker State Extraction Error]: failed to extract state: %v", err)
+		log.Printf("[Background Worker]: extracting topic, summary, state variables, and salient facts...")
+		newSummary, activeTopic, stateJSON, salientFacts, errExt := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(room.StateSchema))
+		if errExt != nil {
+			log.Printf("[Background Worker State Extraction Error]: failed to extract state: %v", errExt)
 		} else {
 			state.Summary = newSummary
 			state.ActiveTopic = activeTopic
@@ -144,6 +158,36 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 				log.Printf("[Background Worker State Save Error]: failed to save state: %v", err)
 			} else {
 				log.Printf("[Background Worker]: room state successfully updated. (Topic: '%s', Sequence: %d)", activeTopic, task.Sequence)
+			}
+			
+			if !isLargeMessage && len(salientFacts) > 0 {
+				log.Printf("[Background Worker]: LLM extracted %d salient facts. Generating embeddings...", len(salientFacts))
+				for _, fact := range salientFacts {
+					if fact == "" {
+						continue
+					}
+					emb, errEmb := u.openRouterClient.GenerateEmbedding(ctx, fact)
+					if errEmb != nil {
+						log.Printf("[Background Worker Embedding Error]: failed to embed fact: %v", errEmb)
+						continue
+					}
+					mem := &domain.Memory{
+						ProjectID: task.ProjectID,
+						RoomID:    &task.RoomID,
+						Content:   fact,
+						Embedding: emb,
+						Metadata:  `{"type":"salient_fact"}`,
+					}
+					if room.ExternalUserID != "" {
+						mem.ExternalUserID = &room.ExternalUserID
+					}
+					if err := u.memoryRepo.Create(ctx, mem); err != nil {
+						log.Printf("[Background Worker Memory Save Error]: failed to save fact memory: %v", err)
+					}
+				}
+				log.Printf("[Background Worker]: Successfully embedded and saved salient facts.")
+			} else if !isLargeMessage {
+				log.Printf("[Background Worker]: No new salient facts extracted for this turn.")
 			}
 		}
 	}
@@ -249,4 +293,41 @@ func (u *messageUsecase) ListMessages(ctx context.Context, projectID string, roo
 
 func (u *messageUsecase) ListProjectLogs(ctx context.Context, projectID string, roomID string, externalUserID string, search string, role string, sortBy string, sortOrder string, limit int, offset int) ([]domain.ProjectLogEntry, int, error) {
 	return u.messageRepo.ListProjectLogs(ctx, projectID, roomID, externalUserID, search, role, sortBy, sortOrder, limit, offset)
+}
+
+func isSpam(text string) bool {
+	if len(text) < 500 {
+		return false
+	}
+	var b bytes.Buffer
+	w := gzip.NewWriter(&b)
+	_, _ = w.Write([]byte(text))
+	_ = w.Close()
+	ratio := float64(b.Len()) / float64(len(text))
+	return ratio < 0.05
+}
+
+func chunkText(text string, chunkSize int, overlap int) []string {
+	var chunks []string
+	if len(text) == 0 {
+		return chunks
+	}
+	if len(text) <= chunkSize {
+		return []string{text}
+	}
+	step := chunkSize - overlap
+	if step <= 0 {
+		step = chunkSize
+	}
+	for i := 0; i < len(text); i += step {
+		end := i + chunkSize
+		if end > len(text) {
+			end = len(text)
+		}
+		chunks = append(chunks, text[i:end])
+		if end == len(text) {
+			break
+		}
+	}
+	return chunks
 }

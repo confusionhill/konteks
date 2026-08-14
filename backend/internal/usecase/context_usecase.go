@@ -31,9 +31,11 @@ type contextUsecase struct {
 }
 
 type evalTask struct {
-	ProjectID string
-	Query     string
-	Pkg       *domain.ContextPackage
+	ProjectID          string
+	Query              string
+	Pkg                *domain.ContextPackage
+	IsEncrypted        bool
+	EncryptionMetadata *string
 }
 
 func NewContextUsecase(
@@ -75,10 +77,13 @@ func (u *contextUsecase) evaluationWorker() {
 		eval.ID = uuid.NewString()
 		eval.ProjectID = task.ProjectID
 		eval.RoomID = task.Pkg.RoomID
+		eval.IsEncrypted = task.IsEncrypted
+		eval.EncryptionMetadata = task.EncryptionMetadata
+
 		if err := u.evalRepo.Create(ctx, eval); err != nil {
 			log.Printf("[Evaluation Worker Error]: failed to save evaluation: %v", err)
 		} else {
-			log.Printf("[Evaluation Worker]: successfully evaluated context for room %s (Score: %.2f/%.2f)", eval.RoomID, eval.RelevanceScore, eval.CompletenessScore)
+			log.Printf("[Evaluation Worker]: successfully evaluated context for room %s (Score: %.2f/%.2f, Encrypted: %t)", eval.RoomID, eval.RelevanceScore, eval.CompletenessScore, eval.IsEncrypted)
 		}
 	}
 }
@@ -480,7 +485,13 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 
 	if u.cfg.EvaluationSampleRate > 0 && rand.Float64() <= u.cfg.EvaluationSampleRate {
 		select {
-		case u.evalQueue <- evalTask{ProjectID: projectID, Query: req.Query, Pkg: pkg}:
+		case u.evalQueue <- evalTask{
+			ProjectID:          projectID,
+			Query:              req.Query,
+			Pkg:                pkg,
+			IsEncrypted:        req.IsEncrypted,
+			EncryptionMetadata: req.EncryptionMetadata,
+		}:
 		default:
 			log.Printf("[Context Usecase Warning]: eval queue is full, skipping evaluation")
 		}

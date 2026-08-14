@@ -22,9 +22,11 @@ type ContextPolicy struct {
 }
 
 type GetContextRequest struct {
-	Query         string          `json:"query"`
-	Policy        ContextPolicy   `json:"policy"`
-	DynamicSchema json.RawMessage `json:"dynamic_schema,omitempty"`
+	Query              string          `json:"query"`
+	Policy             ContextPolicy   `json:"policy"`
+	DynamicSchema      json.RawMessage `json:"dynamic_schema,omitempty"`
+	IsEncrypted        bool            `json:"is_encrypted"`
+	EncryptionMetadata *string         `json:"encryption_metadata,omitempty"`
 }
 
 type ContextPackage struct {

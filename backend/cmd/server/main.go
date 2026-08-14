@@ -153,6 +153,7 @@ func main() {
 	v1.GET("/rooms/:room_id/children", roomHandler.GetChildRooms)
 	v1.PATCH("/rooms/:room_id", roomHandler.UpdateRoom)
 	v1.DELETE("/rooms/:room_id", roomHandler.DeleteRoom)
+	v1.POST("/rooms/:room_id/warmup", contextHandler.WarmupRoom)
 
 	// Messages API
 	v1.POST("/rooms/:room_id/messages", messageHandler.CreateMessage)

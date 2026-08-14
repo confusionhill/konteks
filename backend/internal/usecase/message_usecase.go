@@ -159,11 +159,17 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, projectID string, ro
 	}
 
 	if room.Status == domain.RoomStatusArchived {
-		log.Printf("[Message Usecase]: Room %s is archived. Starting Parallel Pre-Warming...", roomID)
+		log.Printf("[Message Usecase]: Room %s is archived. Starting Background Hydration...", roomID)
 		_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
 
 		go func() {
 			bgCtx := context.Background()
+			if room.ArchiveS3Path == nil || *room.ArchiveS3Path == "" {
+				log.Printf("[Message Usecase Background Error]: room is archived but archive S3 path is empty for room %s", roomID)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
 			archiveBytes, err := u.storageProvider.GetObject(bgCtx, *room.ArchiveS3Path)
 			if err != nil {
 				log.Printf("[Pre-Warming Error] failed to retrieve S3 object: %v", err)
@@ -185,57 +191,21 @@ func (u *messageUsecase) CreateMessage(ctx context.Context, projectID string, ro
 				return
 			}
 
-			var stage1Msgs []domain.Message
-			var stage2Msgs []domain.Message
+			// We only need to hydrate older messages since the newest 3 and room state are already in the DB
+			var olderMessages []domain.Message
 			if len(payload.Messages) > 3 {
-				stage1Msgs = payload.Messages[len(payload.Messages)-3:]
-				stage2Msgs = payload.Messages[:len(payload.Messages)-3]
-			} else {
-				stage1Msgs = payload.Messages
+				olderMessages = payload.Messages[:len(payload.Messages)-3]
 			}
 
-			err = u.roomRepo.HydrateRoomTx(bgCtx, roomID, &payload.RoomState, stage1Msgs, nil)
-			if err != nil {
-				log.Printf("[Pre-Warming Error] Stage 1 Hydration failed: %v", err)
+			log.Printf("[Pre-Warming]: Spawning Stage 2 Backfill for room %s...", roomID)
+			errHydrate := u.roomRepo.HydrateRoomTx(bgCtx, roomID, nil, olderMessages, payload.Memories)
+			if errHydrate != nil {
+				log.Printf("[Pre-Warming Error] Stage 2 Backfill failed: %v", errHydrate)
 				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
-				return
-			}
-
-			msg := &domain.Message{
-				ID:                 uuid.New().String(),
-				RoomID:             roomID,
-				Role:               role,
-				Content:            content,
-				IsEncrypted:        isEncrypted,
-				EncryptionMetadata: encryptionMetadata,
-			}
-			if err := u.messageRepo.Create(bgCtx, msg); err != nil {
-				log.Printf("[Pre-Warming Error] failed to save message: %v", err)
 			} else {
-				select {
-				case u.taskQueue <- messageTask{
-					ProjectID: projectID,
-					RoomID:    roomID,
-					Content:   content,
-					Sequence:  msg.Sequence,
-				}:
-				default:
-				}
+				log.Printf("[Pre-Warming]: Stage 2 Backfill completed successfully for room %s.", roomID)
 			}
-
-			log.Printf("[Pre-Warming]: Stage 1 Hydrate complete. Spawning Stage 2 Backfill for room %s...", roomID)
-			_ = u.roomRepo.HydrateRoomTx(bgCtx, roomID, nil, stage2Msgs, payload.Memories)
 		}()
-
-		msg := &domain.Message{
-			ID:                 uuid.New().String(),
-			RoomID:             roomID,
-			Role:               role,
-			Content:            content,
-			IsEncrypted:        isEncrypted,
-			EncryptionMetadata: encryptionMetadata,
-		}
-		return msg, nil
 	}
 
 	msg := &domain.Message{

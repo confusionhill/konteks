@@ -86,4 +86,5 @@ type EvaluationRepository interface {
 
 type ContextUsecase interface {
 	GetContextPackage(ctx context.Context, projectID string, roomID string, req GetContextRequest) (*ContextPackage, error)
+	Warmup(ctx context.Context, projectID string, roomID string) error
 }

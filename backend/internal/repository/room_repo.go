@@ -620,8 +620,15 @@ func (r *roomRepository) ArchiveRoomTx(ctx context.Context, roomID string, archi
 	}
 	defer tx.Rollback()
 
-	// 1. Delete messages
-	_, err = tx.ExecContext(ctx, "DELETE FROM messages WHERE room_id = $1", roomID)
+	// 1. Delete messages (Keep the 3 most recent messages as a hot cache)
+	queryDelMsg := `
+		DELETE FROM messages 
+		WHERE room_id = $1 
+		AND id NOT IN (
+			SELECT id FROM messages WHERE room_id = $1 ORDER BY sequence DESC LIMIT 3
+		)
+	`
+	_, err = tx.ExecContext(ctx, queryDelMsg, roomID)
 	if err != nil {
 		return err
 	}

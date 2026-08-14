@@ -10,7 +10,6 @@ import (
 	"log"
 	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
@@ -62,7 +61,7 @@ func NewContextUsecase(
 		cfg:              cfg,
 		evalQueue:        make(chan evalTask, 1000),
 	}
-	
+
 	for i := 0; i < 2; i++ {
 		go u.evaluationWorker()
 	}
@@ -126,7 +125,7 @@ func (u *contextUsecase) evaluationWorker() {
 			log.Printf("[Evaluation Worker Error]: failed to evaluate context: %v", err)
 			continue
 		}
-		
+
 		eval.ID = uuid.NewString()
 		eval.ProjectID = task.ProjectID
 		eval.RoomID = task.Pkg.RoomID
@@ -252,78 +251,66 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 	}
 
 	if room.Status == domain.RoomStatusArchived {
-		log.Printf("[Context Engine]: Room %s is archived. Triggering Stage 1 Hydration...", roomID)
+		log.Printf("[Context Engine]: Room %s is archived. Triggering Background Hydration...", roomID)
 		err = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
 		if err != nil {
 			return nil, fmt.Errorf("failed to lock room status to hydrating: %w", err)
 		}
 
-		if room.ArchiveS3Path == nil || *room.ArchiveS3Path == "" {
-			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
-			return nil, fmt.Errorf("room is archived but archive S3 path is empty")
-		}
-
-		archiveBytes, err := u.storageProvider.GetObject(ctx, *room.ArchiveS3Path)
-		if err != nil {
-			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
-			return nil, fmt.Errorf("failed to retrieve room archive: %w", err)
-		}
-
-		decompressed, err := decompressGzip(archiveBytes)
-		if err != nil {
-			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
-			return nil, fmt.Errorf("failed to decompress archive data: %w", err)
-		}
-
-		var payload ArchivedRoomPayload
-		if err := json.Unmarshal(decompressed, &payload); err != nil {
-			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
-			return nil, fmt.Errorf("failed to parse archive JSON: %w", err)
-		}
-
-		var stage1Msgs []domain.Message
-		var stage2Msgs []domain.Message
-		if len(payload.Messages) > 3 {
-			stage1Msgs = payload.Messages[len(payload.Messages)-3:]
-			stage2Msgs = payload.Messages[:len(payload.Messages)-3]
-		} else {
-			stage1Msgs = payload.Messages
-		}
-
-		err = u.roomRepo.HydrateRoomTx(ctx, roomID, &payload.RoomState, stage1Msgs, nil)
-		if err != nil {
-			_ = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusArchived)
-			return nil, fmt.Errorf("failed to execute Stage 1 hydration: %w", err)
-		}
-
 		go func() {
 			bgCtx := context.Background()
+
+			if room.ArchiveS3Path == nil || *room.ArchiveS3Path == "" {
+				log.Printf("[Context Engine Background Error]: room is archived but archive S3 path is empty for room %s", roomID)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			archiveBytes, err := u.storageProvider.GetObject(bgCtx, *room.ArchiveS3Path)
+			if err != nil {
+				log.Printf("[Context Engine Background Error]: failed to retrieve room archive: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			decompressed, err := decompressGzip(archiveBytes)
+			if err != nil {
+				log.Printf("[Context Engine Background Error]: failed to decompress archive data: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			var payload ArchivedRoomPayload
+			if err := json.Unmarshal(decompressed, &payload); err != nil {
+				log.Printf("[Context Engine Background Error]: failed to parse archive JSON: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
 			log.Printf("[Context Engine]: Spawning Stage 2 Backfill for room %s...", roomID)
-			errHydrate := u.roomRepo.HydrateRoomTx(bgCtx, roomID, nil, stage2Msgs, payload.Memories)
+
+			// We only need to hydrate older messages since the newest 3 and room state are already in the DB
+			var olderMessages []domain.Message
+			if len(payload.Messages) > 3 {
+				olderMessages = payload.Messages[:len(payload.Messages)-3]
+			}
+
+			errHydrate := u.roomRepo.HydrateRoomTx(bgCtx, roomID, nil, olderMessages, payload.Memories)
 			if errHydrate != nil {
 				log.Printf("[Context Engine Background Hydration Error]: %v", errHydrate)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
 			} else {
 				log.Printf("[Context Engine]: Stage 2 Backfill completed successfully for room %s.", roomID)
 			}
 		}()
 
+		// We do not block here. We continue processing the request using the hot cache from DB.
 		room.Status = domain.RoomStatusActive
 	}
 
 	if room.Status == domain.RoomStatusHydrating {
-		log.Printf("[Context Engine]: Room %s is currently hydrating. Blocking request...", roomID)
-		start := time.Now()
-		for {
-			time.Sleep(50 * time.Millisecond)
-			r, err := u.roomRepo.GetByID(ctx, projectID, roomID)
-			if err == nil && r != nil && r.Status == domain.RoomStatusActive {
-				room = r
-				break
-			}
-			if time.Since(start) > 5*time.Second {
-				return nil, fmt.Errorf("timeout waiting for room hydration")
-			}
-		}
+		log.Printf("[Context Engine]: Room %s is currently hydrating. Serving from hot cache...", roomID)
+		// We do not block here. We continue processing the request using the hot cache from DB.
 	}
 
 	policy := req.Policy
@@ -629,4 +616,69 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 	}
 
 	return pkg, nil
+}
+
+func (u *contextUsecase) Warmup(ctx context.Context, projectID string, roomID string) error {
+	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
+	if err != nil {
+		return err
+	}
+	if room == nil {
+		return fmt.Errorf("room not found or unauthorized")
+	}
+
+	if room.Status == domain.RoomStatusArchived {
+		log.Printf("[Context Engine]: Proactive Warmup triggered for archived room %s. Starting Background Hydration...", roomID)
+		err = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
+		if err != nil {
+			return fmt.Errorf("failed to lock room status to hydrating: %w", err)
+		}
+
+		go func() {
+			bgCtx := context.Background()
+
+			if room.ArchiveS3Path == nil || *room.ArchiveS3Path == "" {
+				log.Printf("[Context Engine Background Error]: room is archived but archive S3 path is empty for room %s", roomID)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			archiveBytes, err := u.storageProvider.GetObject(bgCtx, *room.ArchiveS3Path)
+			if err != nil {
+				log.Printf("[Context Engine Background Error]: failed to retrieve room archive: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			decompressed, err := decompressGzip(archiveBytes)
+			if err != nil {
+				log.Printf("[Context Engine Background Error]: failed to decompress archive data: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			var payload ArchivedRoomPayload
+			if err := json.Unmarshal(decompressed, &payload); err != nil {
+				log.Printf("[Context Engine Background Error]: failed to parse archive JSON: %v", err)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+				return
+			}
+
+			log.Printf("[Context Engine]: Spawning Stage 2 Backfill for room %s...", roomID)
+
+			var olderMessages []domain.Message
+			if len(payload.Messages) > 3 {
+				olderMessages = payload.Messages[:len(payload.Messages)-3]
+			}
+
+			errHydrate := u.roomRepo.HydrateRoomTx(bgCtx, roomID, nil, olderMessages, payload.Memories)
+			if errHydrate != nil {
+				log.Printf("[Context Engine Background Hydration Error]: %v", errHydrate)
+				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
+			} else {
+				log.Printf("[Context Engine]: Stage 2 Backfill completed successfully for room %s.", roomID)
+			}
+		}()
+	}
+	return nil
 }

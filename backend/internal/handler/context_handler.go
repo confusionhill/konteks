@@ -45,3 +45,25 @@ func (h *ContextHandler) GetContextPackage(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, pkg)
 }
+
+func (h *ContextHandler) WarmupRoom(c echo.Context) error {
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
+	}
+
+	roomID := c.Param("room_id")
+	if roomID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id parameter"})
+	}
+
+	err := h.contextUsecase.Warmup(c.Request().Context(), projectID, roomID)
+	if err != nil {
+		if err.Error() == "room not found or unauthorized" {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusAccepted, map[string]string{"status": "hydrating"})
+}

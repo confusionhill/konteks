@@ -41,8 +41,6 @@ CREATE TABLE IF NOT EXISTS artifact_chunks (
 );
 CREATE INDEX IF NOT EXISTS idx_artifact_chunks_artifact ON artifact_chunks(artifact_id);
 CREATE INDEX IF NOT EXISTS idx_artifact_chunks_project ON artifact_chunks(project_id);
-CREATE INDEX IF NOT EXISTS idx_artifact_chunks_vector 
-ON artifact_chunks USING hnsw (embedding vector_cosine_ops);
 
 -- Artifact References table (Knowledge Graph Edges)
 CREATE TABLE IF NOT EXISTS artifact_references (

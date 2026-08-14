@@ -20,6 +20,7 @@ type Config struct {
 	S3Bucket                 string  `json:"s3_bucket"`
 	EvaluationSampleRate     float64 `json:"evaluation_sample_rate"`
 	JWTSecret                string  `json:"jwt_secret"`
+	EncryptionMasterKey      string  `json:"encryption_master_key"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -79,6 +80,9 @@ func LoadConfig(path string) (*Config, error) {
 	if envJWT := os.Getenv("JWT_SECRET"); envJWT != "" {
 		cfg.JWTSecret = envJWT
 	}
+	if envEncKey := os.Getenv("ENCRYPTION_MASTER_KEY"); envEncKey != "" {
+		cfg.EncryptionMasterKey = envEncKey
+	}
 
 	// Default fallbacks
 	if cfg.OpenRouterBaseURL == "" {
@@ -101,6 +105,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if cfg.JWTSecret == "" {
 		cfg.JWTSecret = "contextkit_super_secret_jwt_key_2026_change_in_prod"
+	}
+	if cfg.EncryptionMasterKey == "" {
+		cfg.EncryptionMasterKey = "0123456789abcdef0123456789abcdef"
 	}
 
 	return &cfg, nil

@@ -17,7 +17,10 @@ import {
   Archive,
   ChevronRight,
   Sparkles,
+  Lock,
+  Unlock,
 } from 'lucide-react';
+import { decryptAESGCM } from '../utils/crypto';
 
 interface SnapshotSection {
   label: string;
@@ -89,15 +92,33 @@ const ContextSnapshotViewer: React.FC<{ snapshot: any }> = ({ snapshot }) => {
       {s.relevant_messages && s.relevant_messages.length > 0 && (
         <SnapshotSection label="Relevant Messages" count={s.relevant_messages.length}>
           <div className="space-y-2">
-            {s.relevant_messages.map((m: any, i: number) => (
-              <div
-                key={i}
-                className={`p-2 rounded ${m.role === 'user' ? 'bg-indigo-50 text-indigo-950' : 'bg-slate-50 text-slate-800'}`}
-              >
-                <span className="font-bold text-slate-500 text-[10px] uppercase block mb-0.5">{m.role}: </span>
-                <span>{m.content}</span>
-              </div>
-            ))}
+            {s.relevant_messages.map((m: any, i: number) => {
+              const isEnc = m.is_encrypted || (typeof m.content === 'string' && (m.content.startsWith('enc_') || m.content.includes('+') || m.content.includes('/') || m.content.endsWith('=')));
+              return (
+                <div
+                  key={i}
+                  className={`p-2.5 rounded ${m.role === 'user' ? 'bg-indigo-50 text-indigo-950' : 'bg-slate-50 text-slate-800'}`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-slate-500 text-[10px] uppercase">{m.role}: </span>
+                    {isEnc && (
+                      <span className="inline-flex items-center space-x-1 text-[9px] font-bold uppercase bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                        <Lock className="h-2.5 w-2.5 text-amber-600" />
+                        <span>Encrypted Payload</span>
+                      </span>
+                    )}
+                  </div>
+                  {isEnc ? (
+                    <div className="p-2 bg-amber-50/60 border border-amber-200/80 rounded text-amber-900 font-mono text-xs flex items-center space-x-1.5">
+                      <Lock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                      <span>Encrypted Payload</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs">{m.content}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </SnapshotSection>
       )}
@@ -142,6 +163,43 @@ export const RoomDetailPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [decryptedEvals, setDecryptedEvals] = useState<Record<string, { query?: string; reasoning?: string }>>({});
+  const [decryptingEvalId, setDecryptingEvalId] = useState<string | null>(null);
+
+  const handleRevealEvalPayload = async (ev: ContextEvaluation) => {
+    let keyToUse = localStorage.getItem('konteks_master_key');
+    if (!keyToUse) {
+      keyToUse = prompt('Enter your Project Master Secret Key to decrypt evaluation:');
+      if (!keyToUse) return;
+      localStorage.setItem('konteks_master_key', keyToUse);
+    }
+    try {
+      setDecryptingEvalId(ev.id);
+      let meta: any = {};
+      if (ev.encryption_metadata) {
+        try {
+          meta = typeof ev.encryption_metadata === 'string' ? JSON.parse(ev.encryption_metadata) : ev.encryption_metadata;
+        } catch {
+          meta = {};
+        }
+      }
+      const nonce = meta.nonce || '';
+      let decQ = ev.query;
+      if (ev.query) {
+        decQ = await decryptAESGCM(ev.query, nonce, keyToUse);
+      }
+      let decR = ev.reasoning;
+      if (ev.reasoning) {
+        decR = await decryptAESGCM(ev.reasoning, nonce, keyToUse);
+      }
+      setDecryptedEvals((prev) => ({ ...prev, [ev.id]: { query: decQ, reasoning: decR } }));
+    } catch (err) {
+      alert('Failed to decrypt evaluation with provided secret key');
+      localStorage.removeItem('konteks_master_key');
+    } finally {
+      setDecryptingEvalId(null);
+    }
+  };
 
   useEffect(() => {
     async function loadRoom() {
@@ -237,13 +295,12 @@ export const RoomDetailPage: React.FC = () => {
               </span>
               {detail.room.status && detail.room.status !== 'active' && (
                 <span
-                  className={`ml-2 text-xs font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                    detail.room.status === 'archived'
-                      ? 'bg-slate-100 text-slate-500 border-slate-200'
-                      : detail.room.status === 'archiving'
+                  className={`ml-2 text-xs font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${detail.room.status === 'archived'
+                    ? 'bg-slate-100 text-slate-500 border-slate-200'
+                    : detail.room.status === 'archiving'
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
                       : 'bg-blue-50 text-blue-700 border-blue-200'
-                  }`}
+                    }`}
                 >
                   {detail.room.status}
                 </span>
@@ -424,76 +481,111 @@ export const RoomDetailPage: React.FC = () => {
           </p>
 
           <div className="space-y-4">
-            {evaluations.map((ev) => (
-              <div key={ev.id} className="border border-slate-100 rounded-lg p-5 bg-slate-50/50 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-mono font-bold text-slate-500">
-                      {new Date(ev.created_at).toLocaleString()}
-                    </span>
-                    {ev.is_new_topic && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100">
-                        Topic Shift
+            {evaluations.map((ev) => {
+              const isEnc = ev.is_encrypted || (typeof ev.query === 'string' && (ev.query.startsWith('enc_') || ev.query.endsWith('=')));
+              const decData = decryptedEvals[ev.id];
+              return (
+                <div key={ev.id} className="border border-slate-100 rounded-lg p-5 bg-slate-50/50 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-mono font-bold text-slate-500">
+                        {new Date(ev.created_at).toLocaleString()}
                       </span>
+                      {isEnc && (
+                        <span className="inline-flex items-center space-x-1 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+                          <Lock className="h-3 w-3 text-amber-600" />
+                          <span>Encrypted Payload</span>
+                        </span>
+                      )}
+                      {ev.is_new_topic && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          Topic Shift
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2 text-[11px] font-bold uppercase tracking-wider">
+                      <span
+                        className={`px-2.5 py-1 rounded-md ${ev.relevance_score >= 0.8
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                          }`}
+                      >
+                        Relevance: {(ev.relevance_score * 100).toFixed(0)}%
+                      </span>
+                      <span
+                        className={`px-2.5 py-1 rounded-md ${ev.completeness_score >= 0.8
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                          }`}
+                      >
+                        Completeness: {(ev.completeness_score * 100).toFixed(0)}%
+                      </span>
+                      <span
+                        className={`px-2.5 py-1 rounded-md ${ev.token_efficiency_score >= 0.8
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                          }`}
+                      >
+                        Efficiency: {(ev.token_efficiency_score * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                      Query
+                    </span>
+                    {isEnc && !decData ? (
+                      <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-lg text-amber-900 font-mono text-xs flex items-center justify-between">
+                        <span>🔒 Encrypted Payload</span>
+                        <button
+                          onClick={() => handleRevealEvalPayload(ev)}
+                          disabled={decryptingEvalId === ev.id}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-sans font-bold transition-all shadow-xs cursor-pointer"
+                        >
+                          <Unlock className="h-3 w-3" />
+                          <span>{decryptingEvalId === ev.id ? 'Decrypting...' : 'Reveal Payload'}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-medium text-slate-900 bg-white p-3 border border-slate-200 rounded-lg font-mono">
+                        {decData?.query || ev.query}
+                      </p>
                     )}
                   </div>
-                  <div className="flex gap-2 text-[11px] font-bold uppercase tracking-wider">
-                    <span
-                      className={`px-2.5 py-1 rounded-md ${
-                        ev.relevance_score >= 0.8
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      Relevance: {(ev.relevance_score * 100).toFixed(0)}%
+
+                  <div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                      Reasoning
                     </span>
-                    <span
-                      className={`px-2.5 py-1 rounded-md ${
-                        ev.completeness_score >= 0.8
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      Completeness: {(ev.completeness_score * 100).toFixed(0)}%
-                    </span>
-                    <span
-                      className={`px-2.5 py-1 rounded-md ${
-                        ev.token_efficiency_score >= 0.8
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      Efficiency: {(ev.token_efficiency_score * 100).toFixed(0)}%
-                    </span>
+                    {isEnc && !decData ? (
+                      <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-lg text-amber-900 font-mono text-xs flex items-center justify-between">
+                        <span>🔒 Encrypted Reasoning</span>
+                        <button
+                          onClick={() => handleRevealEvalPayload(ev)}
+                          disabled={decryptingEvalId === ev.id}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-sans font-bold transition-all shadow-xs cursor-pointer"
+                        >
+                          <Unlock className="h-3 w-3" />
+                          <span>{decryptingEvalId === ev.id ? 'Decrypting...' : 'Reveal Payload'}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-700 bg-white p-3 border border-slate-200 rounded-lg italic leading-relaxed">
+                        {decData?.reasoning || ev.reasoning}
+                      </p>
+                    )}
                   </div>
-                </div>
 
-                <div>
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-                    Query
-                  </span>
-                  <p className="text-sm font-medium text-slate-900 bg-white p-3 border border-slate-200 rounded-lg">
-                    {ev.query}
-                  </p>
+                  <details className="text-sm">
+                    <summary className="cursor-pointer font-semibold text-indigo-600 hover:text-indigo-700 list-none flex items-center space-x-1">
+                      <span>View Measured Context Snapshot</span>
+                    </summary>
+                    <ContextSnapshotViewer snapshot={ev.context_snapshot} />
+                  </details>
                 </div>
-
-                <div>
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-                    Reasoning
-                  </span>
-                  <p className="text-sm text-slate-700 bg-white p-3 border border-slate-200 rounded-lg italic leading-relaxed">
-                    {ev.reasoning}
-                  </p>
-                </div>
-
-                <details className="text-sm">
-                  <summary className="cursor-pointer font-semibold text-indigo-600 hover:text-indigo-700 list-none flex items-center space-x-1">
-                    <span>View Measured Context Snapshot</span>
-                  </summary>
-                  <ContextSnapshotViewer snapshot={ev.context_snapshot} />
-                </details>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

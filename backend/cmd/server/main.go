@@ -83,6 +83,7 @@ func main() {
 
 	// 5. Initialize Services & Clients
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
+	cryptoService := service.NewCryptoService()
 	storageProvider, err := service.NewS3StorageProvider(cfg)
 	if err != nil {
 		log.Fatalf("failed to initialize S3 storage provider: %v", err)
@@ -93,8 +94,8 @@ func main() {
 
 	// 6. Initialize Business Logic Usecases
 	roomUsecase := usecase.NewRoomUsecase(roomRepo)
-	messageUsecase := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider)
-	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, evalRepo, cfg)
+	messageUsecase := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, cryptoService, cfg)
+	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, evalRepo, cryptoService, cfg)
 	eventUsecase := usecase.NewEventUsecase(roomRepo, eventRepo)
 	usageUsecase := usecase.NewUsageUsecase(usageRepo)
 
@@ -117,7 +118,7 @@ func main() {
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete, http.MethodOptions},
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, "X-Project-ID", "X-API-Key"},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, "X-Project-ID", "X-API-Key", "X-Encryption-Key"},
 	}))
 
 	// Liveness Probe Check

@@ -319,7 +319,7 @@ export const EvaluationDetailPage: React.FC = () => {
           <pre>
             {showDecrypted
               ? JSON.stringify(decryptedSnapshot || evaluation.context_snapshot || {}, null, 2)
-              : '// 🔒 Context Snapshot is Encrypted (AES-256-GCM)'}
+              : '// 🔒 Context Snapshot is Encrypted'}
           </pre>
         </div>
       </div>

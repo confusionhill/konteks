@@ -17,6 +17,7 @@ import (
 
 	"github.com/dika/contextkit/backend/internal/config"
 	"github.com/dika/contextkit/backend/internal/domain"
+	"github.com/dika/contextkit/backend/internal/service"
 )
 
 type contextUsecase struct {
@@ -26,6 +27,7 @@ type contextUsecase struct {
 	openRouterClient domain.OpenRouterServiceClient
 	storageProvider  domain.StorageProvider
 	evalRepo         domain.EvaluationRepository
+	cryptoService    service.CryptoService
 	cfg              *config.Config
 	evalQueue        chan evalTask
 }
@@ -36,6 +38,7 @@ type evalTask struct {
 	Pkg                *domain.ContextPackage
 	IsEncrypted        bool
 	EncryptionMetadata *string
+	RequestKey         string
 }
 
 func NewContextUsecase(
@@ -45,6 +48,7 @@ func NewContextUsecase(
 	openRouterClient domain.OpenRouterServiceClient,
 	storageProvider domain.StorageProvider,
 	evalRepo domain.EvaluationRepository,
+	cryptoService service.CryptoService,
 	cfg *config.Config,
 ) domain.ContextUsecase {
 	u := &contextUsecase{
@@ -54,6 +58,7 @@ func NewContextUsecase(
 		openRouterClient: openRouterClient,
 		storageProvider:  storageProvider,
 		evalRepo:         evalRepo,
+		cryptoService:    cryptoService,
 		cfg:              cfg,
 		evalQueue:        make(chan evalTask, 1000),
 	}
@@ -67,8 +72,56 @@ func NewContextUsecase(
 
 func (u *contextUsecase) evaluationWorker() {
 	for task := range u.evalQueue {
+		if task.IsEncrypted {
+			log.Printf("[Evaluation Worker]: Skipping context evaluation for encrypted payload (Room %s)", task.Pkg.RoomID)
+			continue
+		}
 		ctx := context.Background()
-		eval, err := u.openRouterClient.EvaluateContext(ctx, task.Query, task.Pkg)
+		evalQuery := task.Query
+		var key []byte
+		if u.cryptoService != nil && u.cfg != nil {
+			key = u.cryptoService.ResolveKey(task.RequestKey, u.cfg.EncryptionMasterKey)
+		}
+
+		if task.IsEncrypted && len(key) > 0 {
+			var nonce string
+			if task.EncryptionMetadata != nil {
+				var meta map[string]interface{}
+				if json.Unmarshal([]byte(*task.EncryptionMetadata), &meta) == nil {
+					if n, ok := meta["nonce"].(string); ok {
+						nonce = n
+					}
+				}
+			}
+			if decrypted, errDec := u.cryptoService.Decrypt(task.Query, nonce, key); errDec == nil {
+				evalQuery = decrypted
+			}
+		}
+
+		evalPkg := *task.Pkg
+		if len(evalPkg.RelevantMessages) > 0 && len(key) > 0 {
+			decryptedMsgs := make([]domain.Message, len(evalPkg.RelevantMessages))
+			for i, m := range evalPkg.RelevantMessages {
+				decryptedMsgs[i] = m
+				if m.IsEncrypted {
+					var nonce string
+					if m.EncryptionMetadata != nil {
+						var meta map[string]interface{}
+						if json.Unmarshal([]byte(*m.EncryptionMetadata), &meta) == nil {
+							if n, ok := meta["nonce"].(string); ok {
+								nonce = n
+							}
+						}
+					}
+					if decrypted, errDec := u.cryptoService.Decrypt(m.Content, nonce, key); errDec == nil {
+						decryptedMsgs[i].Content = decrypted
+					}
+				}
+			}
+			evalPkg.RelevantMessages = decryptedMsgs
+		}
+
+		eval, err := u.openRouterClient.EvaluateContext(ctx, evalQuery, &evalPkg)
 		if err != nil {
 			log.Printf("[Evaluation Worker Error]: failed to evaluate context: %v", err)
 			continue
@@ -79,6 +132,39 @@ func (u *contextUsecase) evaluationWorker() {
 		eval.RoomID = task.Pkg.RoomID
 		eval.IsEncrypted = task.IsEncrypted
 		eval.EncryptionMetadata = task.EncryptionMetadata
+
+		// Preserve original encrypted ContextSnapshot in database
+		if task.IsEncrypted {
+			cleanedOriginalPkg := *task.Pkg
+			if len(cleanedOriginalPkg.Memories) > 0 {
+				cleanedMem := make([]domain.Memory, len(cleanedOriginalPkg.Memories))
+				for i, m := range cleanedOriginalPkg.Memories {
+					c := m
+					c.Embedding = nil
+					cleanedMem[i] = c
+				}
+				cleanedOriginalPkg.Memories = cleanedMem
+			}
+			if snapBytes, errSnap := json.Marshal(cleanedOriginalPkg); errSnap == nil {
+				eval.ContextSnapshot = snapBytes
+			}
+		}
+
+		if task.IsEncrypted && len(key) > 0 && u.cryptoService != nil {
+			encQ, nonce, errEncQ := u.cryptoService.Encrypt(eval.Query, key)
+			encR, _, errEncR := u.cryptoService.Encrypt(eval.Reasoning, key)
+			if errEncQ == nil && errEncR == nil {
+				eval.Query = encQ
+				eval.Reasoning = encR
+				metaJSON, _ := json.Marshal(map[string]string{
+					"alg":         "AES-256-GCM",
+					"key_version": "v1",
+					"nonce":       nonce,
+				})
+				metaStr := string(metaJSON)
+				eval.EncryptionMetadata = &metaStr
+			}
+		}
 
 		if err := u.evalRepo.Create(ctx, eval); err != nil {
 			log.Printf("[Evaluation Worker Error]: failed to save evaluation: %v", err)
@@ -133,15 +219,25 @@ func classifyStrategy(query string) string {
 
 func hasPronouns(query string) bool {
 	q := strings.ToLower(strings.TrimSpace(query))
-	pronouns := []string{" it ", " that ", " which ", " this ", " them ", " option "}
+	if q == "" {
+		return false
+	}
+
+	greetings := map[string]bool{
+		"hi": true, "hello": true, "hey": true, "yo": true, "greetings": true,
+		"thanks": true, "thank you": true, "ok": true, "okay": true, "yes": true, "no": true,
+		"help": true, "info": true, "start": true, "stop": true,
+	}
+	if greetings[q] {
+		return false
+	}
+
+	pronouns := []string{" it ", " that ", " which ", " this ", " them ", " option ", " same ", " the hotel ", " the flight ", " the room "}
 	padded := " " + q + " "
 	for _, p := range pronouns {
 		if strings.Contains(padded, p) {
 			return true
 		}
-	}
-	if len(strings.Fields(q)) <= 3 && q != "" {
-		return true
 	}
 	return false
 }
@@ -310,6 +406,29 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		history = []domain.Message{}
 	}
 
+	decryptedHistory := make([]domain.Message, len(history))
+	var key []byte
+	if u.cryptoService != nil && u.cfg != nil {
+		key = u.cryptoService.ResolveKey(req.RequestKey, u.cfg.EncryptionMasterKey)
+	}
+	for i, m := range history {
+		decryptedHistory[i] = m
+		if m.IsEncrypted && len(key) > 0 {
+			var nonce string
+			if m.EncryptionMetadata != nil {
+				var meta map[string]interface{}
+				if json.Unmarshal([]byte(*m.EncryptionMetadata), &meta) == nil {
+					if n, ok := meta["nonce"].(string); ok {
+						nonce = n
+					}
+				}
+			}
+			if decrypted, errDec := u.cryptoService.Decrypt(m.Content, nonce, key); errDec == nil {
+				decryptedHistory[i].Content = decrypted
+			}
+		}
+	}
+
 	var matchedMemories []domain.Memory
 	references := make(map[string]string)
 	entities := []domain.Entity{}
@@ -324,7 +443,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		if len(req.DynamicSchema) > 0 && string(req.DynamicSchema) != "null" && string(req.DynamicSchema) != "{}" {
 			g.Go(func() error {
 				log.Printf("[Context Engine]: dynamic schema provided. Performing on-the-fly state extraction...")
-				sum, topic, extState, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(req.DynamicSchema))
+				sum, topic, extState, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(req.DynamicSchema))
 				if errExtract != nil {
 					log.Printf("[Context Engine State Extraction Error]: %v", errExtract)
 				} else {
@@ -363,11 +482,11 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		var resolvedRefs map[string]string
 		var resolvedEnts []domain.Entity
 
-		if len(history) > 0 && hasPronouns(req.Query) {
+		if len(decryptedHistory) > 0 && hasPronouns(req.Query) {
 			currentStateStr := string(state.State)
 			g.Go(func() error {
 				log.Printf("[Context Engine]: Pronoun detected in query. Resolving references...")
-				refs, ents, errRef := u.openRouterClient.ResolveReferences(ctx, history, currentStateStr)
+				refs, ents, errRef := u.openRouterClient.ResolveReferences(ctx, decryptedHistory, currentStateStr)
 				if errRef != nil {
 					log.Printf("[Reference Resolution Warning]: %v", errRef)
 				} else {
@@ -494,7 +613,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		TokensProcessed:  processedTokens,
 	}
 
-	if u.cfg.EvaluationSampleRate > 0 && rand.Float64() <= u.cfg.EvaluationSampleRate {
+	if !req.IsEncrypted && u.cfg.EvaluationSampleRate > 0 && rand.Float64() <= u.cfg.EvaluationSampleRate {
 		select {
 		case u.evalQueue <- evalTask{
 			ProjectID:          projectID,
@@ -502,6 +621,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 			Pkg:                pkg,
 			IsEncrypted:        req.IsEncrypted,
 			EncryptionMetadata: req.EncryptionMetadata,
+			RequestKey:         req.RequestKey,
 		}:
 		default:
 			log.Printf("[Context Usecase Warning]: eval queue is full, skipping evaluation")

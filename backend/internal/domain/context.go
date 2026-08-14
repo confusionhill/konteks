@@ -28,6 +28,7 @@ type GetContextRequest struct {
 	IsEncrypted        bool            `json:"is_encrypted"`
 	EncryptionMetadata *string         `json:"encryption_metadata,omitempty"`
 	IncludeChildren    bool            `json:"include_children,omitempty"`
+	RequestKey         string          `json:"request_key,omitempty"`
 }
 
 type ContextPackage struct {

@@ -200,18 +200,39 @@ type referenceJSON struct {
 func (s *openRouterServiceClient) ResolveReferences(ctx context.Context, history []domain.Message, stateJSON string) (map[string]string, []domain.Entity, error) {
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(s.cfg.OpenRouterBaseURL, "/"))
 
-	systemPrompt := `You are a CaaS Reference Resolver. Analyze recent conversation history and current room state to resolve ambiguous pronouns (e.g. 'it', 'that', 'the second one', 'option A') to ground-truth entity names.
-Output ONLY a valid JSON object matching this schema:
+	systemPrompt := `You are a Context as a Service Reference Resolver. Analyze recent conversation history and current room state to resolve ambiguous pronouns (e.g. 'it', 'that', 'the second option') to ground-truth entity names.
+
+Rules:
+1. ONLY resolve references and entities if they explicitly appear in the conversation history or room state.
+2. If NO ambiguous pronouns or entities exist in the history, return empty structures: {"references": {}, "entities": []}.
+3. NEVER copy example entities below unless they are explicitly mentioned in the provided conversation history.
+
+JSON Schema format:
 {
   "references": {
-    "it": "Hotel Grand Hyatt Bali",
-    "the hotel": "Hotel Grand Hyatt Bali"
+    "<pronoun_or_phrase>": "<resolved_entity_name>"
   },
   "entities": [
     {
-      "type": "hotel",
-      "id": "h_1",
-      "name": "Hotel Grand Hyatt Bali"
+      "type": "<entity_category>",
+      "id": "<entity_id>",
+      "name": "<resolved_entity_name>"
+    }
+  ]
+}
+
+Demonstration Example (For schema reference ONLY):
+Input History: user discusses "Laptop Pro 15", then asks "how much is it?"
+Output:
+{
+  "references": {
+    "it": "Laptop Pro 15"
+  },
+  "entities": [
+    {
+      "type": "product",
+      "id": "p_1",
+      "name": "Laptop Pro 15"
     }
   ]
 }`
@@ -228,6 +249,7 @@ Output ONLY a valid JSON object matching this schema:
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: histBuilder.String()},
 		},
+		ResponseFormat: &responseFormat{Type: "json_object"},
 	}
 
 	jsonBytes, err := json.Marshal(reqBody)

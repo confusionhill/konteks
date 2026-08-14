@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/dika/contextkit/backend/internal/config"
 	"github.com/dika/contextkit/backend/internal/domain"
+	"github.com/dika/contextkit/backend/internal/service"
 	"github.com/google/uuid"
 )
 
@@ -23,6 +25,8 @@ type messageUsecase struct {
 	memoryRepo       domain.MemoryRepository
 	openRouterClient domain.OpenRouterServiceClient
 	storageProvider  domain.StorageProvider
+	cryptoService    service.CryptoService
+	cfg              *config.Config
 	taskQueue        chan messageTask
 }
 
@@ -32,6 +36,8 @@ func NewMessageUsecase(
 	memoryRepo domain.MemoryRepository,
 	openRouterClient domain.OpenRouterServiceClient,
 	storageProvider domain.StorageProvider,
+	cryptoService service.CryptoService,
+	cfg *config.Config,
 ) domain.MessageUsecase {
 	mu := &messageUsecase{
 		roomRepo:         roomRepo,
@@ -39,6 +45,8 @@ func NewMessageUsecase(
 		memoryRepo:       memoryRepo,
 		openRouterClient: openRouterClient,
 		storageProvider:  storageProvider,
+		cryptoService:    cryptoService,
+		cfg:              cfg,
 		taskQueue:        make(chan messageTask, 5000),
 	}
 
@@ -97,8 +105,31 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 
 	history, err := u.messageRepo.ListByRoom(ctx, task.RoomID, 15, 0)
 	if err == nil && len(history) > 0 {
+		decryptedHistory := make([]domain.Message, len(history))
+		var key []byte
+		if u.cryptoService != nil && u.cfg != nil {
+			key = u.cryptoService.ResolveKey("", u.cfg.EncryptionMasterKey)
+		}
+		for i, m := range history {
+			decryptedHistory[i] = m
+			if m.IsEncrypted && len(key) > 0 {
+				var nonce string
+				if m.EncryptionMetadata != nil {
+					var meta map[string]interface{}
+					if json.Unmarshal([]byte(*m.EncryptionMetadata), &meta) == nil {
+						if n, ok := meta["nonce"].(string); ok {
+							nonce = n
+						}
+					}
+				}
+				if decrypted, errDec := u.cryptoService.Decrypt(m.Content, nonce, key); errDec == nil {
+					decryptedHistory[i].Content = decrypted
+				}
+			}
+		}
+
 		log.Printf("[Background Worker]: extracting topic, summary, and state variables...")
-		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, history, state.Summary, string(room.StateSchema))
+		newSummary, activeTopic, stateJSON, err := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(room.StateSchema))
 		if err != nil {
 			log.Printf("[Background Worker State Extraction Error]: failed to extract state: %v", err)
 		} else {

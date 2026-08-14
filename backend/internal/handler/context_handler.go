@@ -29,6 +29,10 @@ func (h *ContextHandler) GetContextPackage(c echo.Context) error {
 	var req domain.GetContextRequest
 	_ = c.Bind(&req)
 
+	if req.RequestKey == "" {
+		req.RequestKey = c.Request().Header.Get("X-Encryption-Key")
+	}
+
 	pkg, err := h.contextUsecase.GetContextPackage(c.Request().Context(), projectID, roomID, req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})

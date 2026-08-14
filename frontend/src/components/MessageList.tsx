@@ -97,26 +97,24 @@ export const MessageList: React.FC<MessageListProps> = ({
           const textContent = isDecrypted
             ? decryptedMap[msg.id]
             : isEncrypted
-            ? `🔒 Encrypted Message Payload (AES-256-GCM)`
-            : msg.content ? msg.content.trim() : '';
+              ? `🔒 Encrypted Message Payload`
+              : msg.content ? msg.content.trim() : '';
 
           return (
             <div
               key={msg.id || idx}
-              className={`p-4 rounded-lg border transition-colors ${
-                isUser
-                  ? 'bg-white border-slate-200 shadow-xs'
-                  : 'bg-slate-50/80 border-slate-100'
-              }`}
+              className={`p-4 rounded-lg border transition-colors ${isUser
+                ? 'bg-white border-slate-200 shadow-xs'
+                : 'bg-slate-50/80 border-slate-100'
+                }`}
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-2">
                   <span
-                    className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                      isUser
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-indigo-100 text-indigo-700'
-                    }`}
+                    className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${isUser
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-indigo-100 text-indigo-700'
+                      }`}
                   >
                     {isUser ? <User className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
                     <span>{msg.role}</span>
@@ -148,7 +146,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                 <div className="flex-1">
                   {isEncrypted && !isDecrypted ? (
                     <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-lg text-amber-900 font-mono text-xs flex items-center justify-between">
-                      <span>🔒 Encrypted Payload (AES-256-GCM)</span>
+                      <span>🔒 Encrypted Payload</span>
                       <button
                         onClick={() => handleRevealPayload(msg)}
                         disabled={decryptingId === msg.id}

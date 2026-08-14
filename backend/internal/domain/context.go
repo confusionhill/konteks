@@ -13,12 +13,16 @@ type Entity struct {
 }
 
 type ContextPolicy struct {
-	MaxTokens         int     `json:"max_tokens,omitempty"`
-	MinRelevanceScore float64 `json:"min_relevance_score,omitempty"`
-	Strategy          string  `json:"strategy,omitempty"` // "auto" (default), "recent_heavy", "memory_heavy", "hybrid"
-	MaxHistoryDepth   int     `json:"max_history_depth,omitempty"`
-	FreshnessWeight   float64 `json:"freshness_weight,omitempty"`
-	FastMode          bool    `json:"fast_mode,omitempty"`
+	MaxTokens            int      `json:"max_tokens,omitempty"`
+	MinRelevanceScore    float64  `json:"min_relevance_score,omitempty"`
+	Strategy             string   `json:"strategy,omitempty"` // "auto" (default), "recent_heavy", "memory_heavy", "hybrid"
+	MaxHistoryDepth      int      `json:"max_history_depth,omitempty"`
+	FreshnessWeight      float64  `json:"freshness_weight,omitempty"`
+	FastMode             bool     `json:"fast_mode,omitempty"`
+	IncludeArtifacts     string   `json:"include_artifacts,omitempty"` // "false" (default), "true", "auto"
+	EnableGraphTraversal bool     `json:"enable_graph_traversal,omitempty"`
+	MaxArtifactTokens    int      `json:"max_artifact_tokens,omitempty"`
+	BlacklistOverride    []string `json:"blacklist_override,omitempty"`
 }
 
 type GetContextRequest struct {
@@ -38,6 +42,7 @@ type ContextPackage struct {
 	State            any                  `json:"state"`
 	RelevantMessages []Message            `json:"relevant_messages"`
 	Memories         []Memory             `json:"memories,omitempty"`
+	Artifacts        []ArtifactContext    `json:"artifacts,omitempty"`
 	Entities         []Entity             `json:"entities"`
 	References       map[string]string    `json:"references,omitempty"`
 	ChildAgents      []ChildAgentOverview `json:"child_agents,omitempty"`

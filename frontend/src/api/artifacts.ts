@@ -63,12 +63,25 @@ export interface AddRoomBlacklistPayload {
 }
 
 function getAuthHeaders(): HeadersInit {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('konteks_token');
+  const activeProjStr = localStorage.getItem('konteks_active_project');
+  let activeProjId = '';
+  if (activeProjStr) {
+    try {
+      activeProjId = JSON.parse(activeProjStr)?.id || '';
+    } catch {
+      // ignore parse error
+    }
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (activeProjId) {
+    headers['X-Project-ID'] = activeProjId;
   }
   return headers;
 }

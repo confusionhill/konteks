@@ -18,6 +18,7 @@ import {
   fetchKnowledgeGraph,
   deleteArtifact,
 } from '../api/artifacts';
+import { useAuth } from '../context/AuthContext';
 import { UploadArtifactModal } from '../components/UploadArtifactModal';
 import { ArtifactEditorModal } from '../components/ArtifactEditorModal';
 import { ArtifactDetailDrawer } from '../components/ArtifactDetailDrawer';
@@ -26,7 +27,8 @@ import { MemoriesInspector } from '../components/MemoriesInspector';
 
 export const ArtifactsPage: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
-  const activeProjectId = projectId || 'b0000000-0000-0000-0000-000000000001';
+  const { activeProject } = useAuth();
+  const activeProjectId = projectId || activeProject?.id || 'b0000000-0000-0000-0000-000000000001';
 
   const [activeTab, setActiveTab] = useState<'explorer' | 'graph' | 'facts'>('explorer');
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);

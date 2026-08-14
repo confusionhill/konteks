@@ -32,6 +32,8 @@ export interface ContextEvaluation {
   token_efficiency_score: number;
   reasoning: string;
   is_new_topic: boolean;
+  is_encrypted?: boolean;
+  encryption_metadata?: Record<string, any> | string;
   created_at: string;
 }
 

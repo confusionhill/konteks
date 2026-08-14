@@ -59,6 +59,8 @@ type ContextEvaluation struct {
 	TokenEfficiencyScore float64         `json:"token_efficiency_score"`
 	Reasoning            string          `json:"reasoning"`
 	IsNewTopic           bool            `json:"is_new_topic"`
+	IsEncrypted          bool            `json:"is_encrypted"`
+	EncryptionMetadata   *string         `json:"encryption_metadata,omitempty"`
 	CreatedAt            time.Time       `json:"created_at"`
 }
 

@@ -17,14 +17,14 @@ func NewEvaluationRepository(db *sqlx.DB) domain.EvaluationRepository {
 
 func (r *evaluationRepo) Create(ctx context.Context, eval *domain.ContextEvaluation) error {
 	q := `INSERT INTO context_evaluations 
-		(id, project_id, room_id, query, context_snapshot, relevance_score, completeness_score, token_efficiency_score, reasoning, is_new_topic)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
-	_, err := r.db.ExecContext(ctx, q, eval.ID, eval.ProjectID, eval.RoomID, eval.Query, eval.ContextSnapshot, eval.RelevanceScore, eval.CompletenessScore, eval.TokenEfficiencyScore, eval.Reasoning, eval.IsNewTopic)
+		(id, project_id, room_id, query, context_snapshot, relevance_score, completeness_score, token_efficiency_score, reasoning, is_new_topic, is_encrypted, encryption_metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+	_, err := r.db.ExecContext(ctx, q, eval.ID, eval.ProjectID, eval.RoomID, eval.Query, eval.ContextSnapshot, eval.RelevanceScore, eval.CompletenessScore, eval.TokenEfficiencyScore, eval.Reasoning, eval.IsNewTopic, eval.IsEncrypted, eval.EncryptionMetadata)
 	return err
 }
 
 func (r *evaluationRepo) GetByRoomID(ctx context.Context, roomID string) ([]domain.ContextEvaluation, error) {
-	q := `SELECT id, project_id, room_id, query, context_snapshot, relevance_score, completeness_score, token_efficiency_score, reasoning, is_new_topic, created_at
+	q := `SELECT id, project_id, room_id, query, context_snapshot, relevance_score, completeness_score, token_efficiency_score, reasoning, is_new_topic, is_encrypted, encryption_metadata, created_at
 		FROM context_evaluations WHERE room_id = $1 ORDER BY created_at DESC`
 	rows, err := r.db.QueryxContext(ctx, q, roomID)
 	if err != nil {
@@ -35,7 +35,7 @@ func (r *evaluationRepo) GetByRoomID(ctx context.Context, roomID string) ([]doma
 	var evals []domain.ContextEvaluation
 	for rows.Next() {
 		var e domain.ContextEvaluation
-		if err := rows.Scan(&e.ID, &e.ProjectID, &e.RoomID, &e.Query, &e.ContextSnapshot, &e.RelevanceScore, &e.CompletenessScore, &e.TokenEfficiencyScore, &e.Reasoning, &e.IsNewTopic, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.ProjectID, &e.RoomID, &e.Query, &e.ContextSnapshot, &e.RelevanceScore, &e.CompletenessScore, &e.TokenEfficiencyScore, &e.Reasoning, &e.IsNewTopic, &e.IsEncrypted, &e.EncryptionMetadata, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		evals = append(evals, e)
@@ -44,10 +44,10 @@ func (r *evaluationRepo) GetByRoomID(ctx context.Context, roomID string) ([]doma
 }
 
 func (r *evaluationRepo) GetByID(ctx context.Context, evalID string) (*domain.ContextEvaluation, error) {
-	q := `SELECT id, project_id, room_id, query, context_snapshot, relevance_score, completeness_score, token_efficiency_score, reasoning, is_new_topic, created_at
+	q := `SELECT id, project_id, room_id, query, context_snapshot, relevance_score, completeness_score, token_efficiency_score, reasoning, is_new_topic, is_encrypted, encryption_metadata, created_at
 		FROM context_evaluations WHERE id = $1`
 	var e domain.ContextEvaluation
-	err := r.db.QueryRowxContext(ctx, q, evalID).Scan(&e.ID, &e.ProjectID, &e.RoomID, &e.Query, &e.ContextSnapshot, &e.RelevanceScore, &e.CompletenessScore, &e.TokenEfficiencyScore, &e.Reasoning, &e.IsNewTopic, &e.CreatedAt)
+	err := r.db.QueryRowxContext(ctx, q, evalID).Scan(&e.ID, &e.ProjectID, &e.RoomID, &e.Query, &e.ContextSnapshot, &e.RelevanceScore, &e.CompletenessScore, &e.TokenEfficiencyScore, &e.Reasoning, &e.IsNewTopic, &e.IsEncrypted, &e.EncryptionMetadata, &e.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (r *evaluationRepo) GetByProjectID(ctx context.Context, projectID string, l
 		return nil, 0, err
 	}
 
-	q := `SELECT id, project_id, room_id, query, context_snapshot, relevance_score, completeness_score, token_efficiency_score, reasoning, is_new_topic, created_at
+	q := `SELECT id, project_id, room_id, query, context_snapshot, relevance_score, completeness_score, token_efficiency_score, reasoning, is_new_topic, is_encrypted, encryption_metadata, created_at
 		FROM context_evaluations 
 		WHERE project_id = $1 
 		ORDER BY created_at DESC 
@@ -75,7 +75,7 @@ func (r *evaluationRepo) GetByProjectID(ctx context.Context, projectID string, l
 	var evals []domain.ContextEvaluation
 	for rows.Next() {
 		var e domain.ContextEvaluation
-		if err := rows.Scan(&e.ID, &e.ProjectID, &e.RoomID, &e.Query, &e.ContextSnapshot, &e.RelevanceScore, &e.CompletenessScore, &e.TokenEfficiencyScore, &e.Reasoning, &e.IsNewTopic, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.ProjectID, &e.RoomID, &e.Query, &e.ContextSnapshot, &e.RelevanceScore, &e.CompletenessScore, &e.TokenEfficiencyScore, &e.Reasoning, &e.IsNewTopic, &e.IsEncrypted, &e.EncryptionMetadata, &e.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		evals = append(evals, e)
@@ -98,4 +98,3 @@ func (r *evaluationRepo) GetSummary(ctx context.Context, projectID string) (*dom
 	}
 	return &sum, nil
 }
-

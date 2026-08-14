@@ -251,6 +251,24 @@ export const RoomDetailPage: React.FC = () => {
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-mono mt-2">
                 {detail.room.id}
               </h1>
+              {detail.room.description && (
+                <p className="text-sm font-medium text-slate-600 mt-1 flex items-center space-x-2">
+                  <span className="bg-slate-100 text-slate-700 font-sans px-2.5 py-0.5 rounded-md border border-slate-200 text-xs">
+                    {detail.room.description}
+                  </span>
+                </p>
+              )}
+              {detail.room.parent_room_id && (
+                <p className="text-xs text-indigo-600 font-mono mt-1">
+                  Parent Room:{' '}
+                  <Link
+                    to={`/dashboard/rooms/${detail.room.parent_room_id}`}
+                    className="underline hover:text-indigo-800"
+                  >
+                    {detail.room.parent_room_id}
+                  </Link>
+                </p>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-3 text-xs font-mono text-slate-500 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
@@ -306,6 +324,48 @@ export const RoomDetailPage: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Child Sub-Agents / Child Rooms Section */}
+      {!loading && detail?.children && detail.children.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-soft p-6 space-y-4">
+          <div className="flex items-center space-x-2 text-slate-900">
+            <Sparkles className="h-5 w-5 text-indigo-600" />
+            <h2 className="text-xl font-bold tracking-tight">Child Sub-Agent Rooms ({detail.children.length})</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {detail.children.map((child) => (
+              <div key={child.room_id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Link
+                    to={`/dashboard/rooms/${child.room_id}`}
+                    className="font-mono font-bold text-indigo-600 hover:underline text-sm"
+                  >
+                    {child.room_id}
+                  </Link>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
+                    {child.status}
+                  </span>
+                </div>
+                {child.description && (
+                  <p className="text-xs font-semibold text-slate-800 bg-white p-2 rounded border border-slate-200">
+                    🎯 {child.description}
+                  </p>
+                )}
+                {child.active_topic && (
+                  <p className="text-xs text-slate-600">
+                    <strong className="text-slate-500 uppercase text-[10px]">Active Topic:</strong> {child.active_topic}
+                  </p>
+                )}
+                {child.summary && (
+                  <p className="text-xs text-slate-600 italic bg-white p-2 rounded border border-slate-100">
+                    "{child.summary}"
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -101,10 +101,11 @@ func (h *DashboardHandler) ListRooms(c echo.Context) error {
 }
 
 type roomDetailResponse struct {
-	Room     *domain.Room        `json:"room"`
-	Metrics  *domain.RoomMetrics `json:"metrics"`
-	State    any                 `json:"state"`
-	Messages []domain.Message    `json:"messages"`
+	Room     *domain.Room                `json:"room"`
+	Metrics  *domain.RoomMetrics         `json:"metrics"`
+	State    any                         `json:"state"`
+	Messages []domain.Message            `json:"messages"`
+	Children []domain.ChildAgentOverview `json:"children"`
 }
 
 func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
@@ -146,6 +147,11 @@ func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
 		metrics = &domain.RoomMetrics{}
 	}
 
+	children, _ := h.roomRepo.ListChildRooms(c.Request().Context(), projectID, roomID)
+	if children == nil {
+		children = []domain.ChildAgentOverview{}
+	}
+
 	var stateResp any
 	if state != nil {
 		var parsedState any
@@ -169,6 +175,7 @@ func (h *DashboardHandler) GetRoomDetail(c echo.Context) error {
 		Metrics:  metrics,
 		State:    stateResp,
 		Messages: messages,
+		Children: children,
 	})
 }
 

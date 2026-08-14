@@ -57,12 +57,19 @@ func main() {
 	defer db.Close()
 
 	// 3. Programmatically Apply Consolidated Database Schema & Seed Data
-	migrationFile := "db/migrations/01_init.sql"
-	log.Printf("applying database migrations from %s...", migrationFile)
-	if err := runMigrations(db, migrationFile); err != nil {
-		log.Printf("migrations warning (continuing execution): %v", err)
-	} else {
-		log.Println("database migrations & seed data applied successfully.")
+	migrationFiles := []string{
+		"db/migrations/01_init.sql",
+		"db/migrations/02_add_encryption_fields.sql",
+		"db/migrations/03_add_evaluation_encryption_fields.sql",
+		"db/migrations/04_add_room_description_and_parent.sql",
+	}
+	for _, migrationFile := range migrationFiles {
+		log.Printf("applying database migrations from %s...", migrationFile)
+		if err := runMigrations(db, migrationFile); err != nil {
+			log.Printf("migrations warning (%s): %v", migrationFile, err)
+		} else {
+			log.Printf("database migration %s applied successfully.", migrationFile)
+		}
 	}
 
 	// 4. Initialize Core Repositories
@@ -142,6 +149,7 @@ func main() {
 	// Rooms API
 	v1.POST("/rooms", roomHandler.CreateRoom)
 	v1.GET("/rooms/:room_id", roomHandler.GetRoomState)
+	v1.GET("/rooms/:room_id/children", roomHandler.GetChildRooms)
 	v1.PATCH("/rooms/:room_id", roomHandler.UpdateRoom)
 	v1.DELETE("/rooms/:room_id", roomHandler.DeleteRoom)
 

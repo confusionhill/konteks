@@ -21,7 +21,7 @@ func NewRoomRepository(db *sqlx.DB) domain.RoomRepository {
 	return &roomRepository{db: db}
 }
 
-func (r *roomRepository) Create(ctx context.Context, projectID string, externalUserID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+func (r *roomRepository) Create(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -31,9 +31,9 @@ func (r *roomRepository) Create(ctx context.Context, projectID string, externalU
 	// Insert room
 	var room domain.Room
 	queryRoom := `
-		INSERT INTO rooms (project_id, external_user_id, state_schema, default_policy, status)
-		VALUES ($1, $2, $3, $4, 'active')
-		RETURNING id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+		INSERT INTO rooms (project_id, external_user_id, description, parent_room_id, state_schema, default_policy, status)
+		VALUES ($1, $2, $3, $4, $5, $6, 'active')
+		RETURNING id, project_id, external_user_id, description, parent_room_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 	`
 	var schemaParam any = nil
 	if len(stateSchema) > 0 && string(stateSchema) != "null" {
@@ -44,11 +44,17 @@ func (r *roomRepository) Create(ctx context.Context, projectID string, externalU
 		pBytes, _ := json.Marshal(defaultPolicy)
 		policyParam = string(pBytes)
 	}
+	var parentParam any = nil
+	if parentRoomID != nil && *parentRoomID != "" {
+		parentParam = *parentRoomID
+	}
 
 	type rawRoom struct {
 		ID             string         `db:"id"`
 		ProjectID      string         `db:"project_id"`
 		ExternalUserID string         `db:"external_user_id"`
+		Description    string         `db:"description"`
+		ParentRoomID   sql.NullString `db:"parent_room_id"`
 		CreatedAt      string         `db:"created_at"`
 		UpdatedAt      string         `db:"updated_at"`
 		StateSchema    sql.NullString `db:"state_schema"`
@@ -57,7 +63,7 @@ func (r *roomRepository) Create(ctx context.Context, projectID string, externalU
 		ArchiveS3Path  sql.NullString `db:"archive_s3_path"`
 	}
 	var rr rawRoom
-	err = tx.GetContext(ctx, &rr, queryRoom, projectID, externalUserID, schemaParam, policyParam)
+	err = tx.GetContext(ctx, &rr, queryRoom, projectID, externalUserID, description, parentParam, schemaParam, policyParam)
 	if err != nil {
 		return nil, err
 	}
@@ -65,9 +71,14 @@ func (r *roomRepository) Create(ctx context.Context, projectID string, externalU
 		ID:             rr.ID,
 		ProjectID:      rr.ProjectID,
 		ExternalUserID: rr.ExternalUserID,
+		Description:    rr.Description,
 		CreatedAt:      rr.CreatedAt,
 		UpdatedAt:      rr.UpdatedAt,
 		Status:         rr.Status,
+	}
+	if rr.ParentRoomID.Valid {
+		pID := rr.ParentRoomID.String
+		room.ParentRoomID = &pID
 	}
 	if rr.ArchiveS3Path.Valid {
 		pathStr := rr.ArchiveS3Path.String
@@ -101,7 +112,7 @@ func (r *roomRepository) Create(ctx context.Context, projectID string, externalU
 
 func (r *roomRepository) GetByID(ctx context.Context, projectID string, roomID string) (*domain.Room, error) {
 	query := `
-		SELECT id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+		SELECT id, project_id, external_user_id, description, parent_room_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 		FROM rooms
 		WHERE project_id = $1 AND id = $2
 	`
@@ -109,6 +120,8 @@ func (r *roomRepository) GetByID(ctx context.Context, projectID string, roomID s
 		ID             string         `db:"id"`
 		ProjectID      string         `db:"project_id"`
 		ExternalUserID string         `db:"external_user_id"`
+		Description    string         `db:"description"`
+		ParentRoomID   sql.NullString `db:"parent_room_id"`
 		CreatedAt      string         `db:"created_at"`
 		UpdatedAt      string         `db:"updated_at"`
 		StateSchema    sql.NullString `db:"state_schema"`
@@ -128,9 +141,14 @@ func (r *roomRepository) GetByID(ctx context.Context, projectID string, roomID s
 		ID:             rr.ID,
 		ProjectID:      rr.ProjectID,
 		ExternalUserID: rr.ExternalUserID,
+		Description:    rr.Description,
 		CreatedAt:      rr.CreatedAt,
 		UpdatedAt:      rr.UpdatedAt,
 		Status:         rr.Status,
+	}
+	if rr.ParentRoomID.Valid {
+		pID := rr.ParentRoomID.String
+		room.ParentRoomID = &pID
 	}
 	if rr.ArchiveS3Path.Valid {
 		pathStr := rr.ArchiveS3Path.String
@@ -330,6 +348,8 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, projectID string,
 			SELECT
 				r.id,
 				COALESCE(r.external_user_id, '') AS external_user_id,
+				COALESCE(r.description, '') AS description,
+				r.parent_room_id,
 				COALESCE(rs.active_topic, '') AS active_topic,
 				COALESCE(mc.msg_count, 0) AS message_count,
 				COALESCE(uc.total_tokens, 0) AS total_tokens_used,
@@ -355,7 +375,7 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, projectID string,
 				GROUP BY room_id
 			) uc ON uc.room_id = r.id
 		)
-		SELECT id, external_user_id, active_topic, message_count, total_tokens_used, total_cost, avg_tokens_per_turn, last_active_at, status, archive_s3_path
+		SELECT id, external_user_id, description, parent_room_id, active_topic, message_count, total_tokens_used, total_cost, avg_tokens_per_turn, last_active_at, status, archive_s3_path
 		FROM room_metrics
 		WHERE project_id = $1 %s
 		ORDER BY %s %s
@@ -373,7 +393,31 @@ func (r *roomRepository) ListWithOverview(ctx context.Context, projectID string,
 	return overviews, total, nil
 }
 
-func (r *roomRepository) Update(ctx context.Context, projectID string, roomID string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+func (r *roomRepository) ListChildRooms(ctx context.Context, projectID string, parentRoomID string) ([]domain.ChildAgentOverview, error) {
+	query := `
+		SELECT 
+			r.id AS room_id,
+			COALESCE(r.description, '') AS description,
+			r.status,
+			COALESCE(rs.active_topic, '') AS active_topic,
+			COALESCE(rs.summary, '') AS summary
+		FROM rooms r
+		LEFT JOIN room_state rs ON rs.room_id = r.id
+		WHERE r.project_id = $1 AND r.parent_room_id = $2
+		ORDER BY r.created_at ASC
+	`
+	var children []domain.ChildAgentOverview
+	err := r.db.SelectContext(ctx, &children, query, projectID, parentRoomID)
+	if err != nil {
+		return nil, err
+	}
+	if children == nil {
+		children = []domain.ChildAgentOverview{}
+	}
+	return children, nil
+}
+
+func (r *roomRepository) Update(ctx context.Context, projectID string, roomID string, description *string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -384,6 +428,8 @@ func (r *roomRepository) Update(ctx context.Context, projectID string, roomID st
 		ID             string         `db:"id"`
 		ProjectID      string         `db:"project_id"`
 		ExternalUserID string         `db:"external_user_id"`
+		Description    string         `db:"description"`
+		ParentRoomID   sql.NullString `db:"parent_room_id"`
 		CreatedAt      string         `db:"created_at"`
 		UpdatedAt      string         `db:"updated_at"`
 		StateSchema    sql.NullString `db:"state_schema"`
@@ -395,7 +441,7 @@ func (r *roomRepository) Update(ctx context.Context, projectID string, roomID st
 	// 1. Fetch current room values to build fallback values
 	var currentRaw rawRoom
 	queryFetch := `
-		SELECT id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+		SELECT id, project_id, external_user_id, description, parent_room_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 		FROM rooms
 		WHERE id = $1 AND project_id = $2
 	`
@@ -405,6 +451,23 @@ func (r *roomRepository) Update(ctx context.Context, projectID string, roomID st
 	}
 
 	// 2. Map update parameters (use fallback if empty/nil)
+	descParam := currentRaw.Description
+	if description != nil {
+		descParam = *description
+	}
+
+	var parentParam any = nil
+	if currentRaw.ParentRoomID.Valid {
+		parentParam = currentRaw.ParentRoomID.String
+	}
+	if parentRoomID != nil {
+		if *parentRoomID == "" {
+			parentParam = nil
+		} else {
+			parentParam = *parentRoomID
+		}
+	}
+
 	schemaParam := currentRaw.StateSchema.String
 	if len(stateSchema) > 0 && string(stateSchema) != "null" {
 		schemaParam = string(stateSchema)
@@ -422,13 +485,13 @@ func (r *roomRepository) Update(ctx context.Context, projectID string, roomID st
 	// 3. Perform update query
 	queryUpdate := `
 		UPDATE rooms
-		SET state_schema = $3, default_policy = $4, updated_at = NOW()
+		SET description = $3, parent_room_id = $4, state_schema = $5, default_policy = $6, updated_at = NOW()
 		WHERE id = $1 AND project_id = $2
-		RETURNING id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+		RETURNING id, project_id, external_user_id, description, parent_room_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 	`
 
 	var rr rawRoom
-	err = tx.GetContext(ctx, &rr, queryUpdate, roomID, projectID, schemaParam, policyParam)
+	err = tx.GetContext(ctx, &rr, queryUpdate, roomID, projectID, descParam, parentParam, schemaParam, policyParam)
 	if err != nil {
 		return nil, err
 	}
@@ -442,9 +505,15 @@ func (r *roomRepository) Update(ctx context.Context, projectID string, roomID st
 		ID:             rr.ID,
 		ProjectID:      rr.ProjectID,
 		ExternalUserID: rr.ExternalUserID,
+		Description:    rr.Description,
 		CreatedAt:      rr.CreatedAt,
 		UpdatedAt:      rr.UpdatedAt,
 		Status:         rr.Status,
+	}
+
+	if rr.ParentRoomID.Valid {
+		pID := rr.ParentRoomID.String
+		room.ParentRoomID = &pID
 	}
 
 	if rr.ArchiveS3Path.Valid {
@@ -470,14 +539,14 @@ func (r *roomRepository) ListRoomsForArchival(ctx context.Context, inactiveDurat
 	var args []interface{}
 	if roomID != "" {
 		query = `
-			SELECT id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+			SELECT id, project_id, external_user_id, description, parent_room_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 			FROM rooms
 			WHERE id = $1 AND status = 'active'
 		`
 		args = []interface{}{roomID}
 	} else {
 		query = `
-			SELECT id, project_id, external_user_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
+			SELECT id, project_id, external_user_id, description, parent_room_id, created_at, updated_at, state_schema, default_policy, status, archive_s3_path
 			FROM rooms
 			WHERE status = 'active' AND updated_at < $1
 		`
@@ -489,6 +558,8 @@ func (r *roomRepository) ListRoomsForArchival(ctx context.Context, inactiveDurat
 		ID             string         `db:"id"`
 		ProjectID      string         `db:"project_id"`
 		ExternalUserID string         `db:"external_user_id"`
+		Description    string         `db:"description"`
+		ParentRoomID   sql.NullString `db:"parent_room_id"`
 		CreatedAt      string         `db:"created_at"`
 		UpdatedAt      string         `db:"updated_at"`
 		StateSchema    sql.NullString `db:"state_schema"`
@@ -509,9 +580,14 @@ func (r *roomRepository) ListRoomsForArchival(ctx context.Context, inactiveDurat
 			ID:             rr.ID,
 			ProjectID:      rr.ProjectID,
 			ExternalUserID: rr.ExternalUserID,
+			Description:    rr.Description,
 			CreatedAt:      rr.CreatedAt,
 			UpdatedAt:      rr.UpdatedAt,
 			Status:         rr.Status,
+		}
+		if rr.ParentRoomID.Valid {
+			pID := rr.ParentRoomID.String
+			room.ParentRoomID = &pID
 		}
 		if rr.StateSchema.Valid && rr.StateSchema.String != "" {
 			room.StateSchema = []byte(rr.StateSchema.String)

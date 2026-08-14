@@ -27,20 +27,22 @@ type GetContextRequest struct {
 	DynamicSchema      json.RawMessage `json:"dynamic_schema,omitempty"`
 	IsEncrypted        bool            `json:"is_encrypted"`
 	EncryptionMetadata *string         `json:"encryption_metadata,omitempty"`
+	IncludeChildren    bool            `json:"include_children,omitempty"`
 }
 
 type ContextPackage struct {
-	RoomID           string            `json:"room_id"`
-	Summary          string            `json:"summary"`
-	ActiveTopic      string            `json:"active_topic"`
-	State            any               `json:"state"`
-	RelevantMessages []Message         `json:"relevant_messages"`
-	Memories         []Memory          `json:"memories,omitempty"`
-	Entities         []Entity          `json:"entities"`
-	References       map[string]string `json:"references,omitempty"`
-	StrategyUsed     string            `json:"strategy_used,omitempty"`
-	TokensEstimated  int               `json:"tokens_estimated,omitempty"`
-	TokensProcessed  int               `json:"tokens_processed,omitempty"`
+	RoomID           string               `json:"room_id"`
+	Summary          string               `json:"summary"`
+	ActiveTopic      string               `json:"active_topic"`
+	State            any                  `json:"state"`
+	RelevantMessages []Message            `json:"relevant_messages"`
+	Memories         []Memory             `json:"memories,omitempty"`
+	Entities         []Entity             `json:"entities"`
+	References       map[string]string    `json:"references,omitempty"`
+	ChildAgents      []ChildAgentOverview `json:"child_agents,omitempty"`
+	StrategyUsed     string               `json:"strategy_used,omitempty"`
+	TokensEstimated  int                  `json:"tokens_estimated,omitempty"`
+	TokensProcessed  int                  `json:"tokens_processed,omitempty"`
 }
 
 type OpenRouterServiceClient interface {

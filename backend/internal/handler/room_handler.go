@@ -18,6 +18,8 @@ func NewRoomHandler(roomUsecase domain.RoomUsecase) *RoomHandler {
 
 type createRoomRequest struct {
 	ExternalUserID string                `json:"external_user_id"`
+	Description    string                `json:"description,omitempty"`
+	ParentRoomID   *string               `json:"parent_room_id,omitempty"`
 	StateSchema    json.RawMessage       `json:"state_schema,omitempty"`
 	DefaultPolicy  *domain.ContextPolicy `json:"default_policy,omitempty"`
 }
@@ -33,7 +35,7 @@ func (h *RoomHandler) CreateRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
-	room, err := h.roomUsecase.CreateRoom(c.Request().Context(), projectID, req.ExternalUserID, req.StateSchema, req.DefaultPolicy)
+	room, err := h.roomUsecase.CreateRoom(c.Request().Context(), projectID, req.ExternalUserID, req.Description, req.ParentRoomID, req.StateSchema, req.DefaultPolicy)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -60,6 +62,25 @@ func (h *RoomHandler) GetRoomState(c echo.Context) error {
 	return c.JSON(http.StatusOK, state)
 }
 
+func (h *RoomHandler) GetChildRooms(c echo.Context) error {
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
+	}
+
+	roomID := c.Param("room_id")
+	if roomID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id parameter"})
+	}
+
+	children, err := h.roomUsecase.ListChildRooms(c.Request().Context(), projectID, roomID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{"children": children})
+}
+
 func (h *RoomHandler) DeleteRoom(c echo.Context) error {
 	projectID, ok := c.Get("project_id").(string)
 	if !ok || projectID == "" {
@@ -80,6 +101,8 @@ func (h *RoomHandler) DeleteRoom(c echo.Context) error {
 }
 
 type updateRoomRequest struct {
+	Description   *string               `json:"description,omitempty"`
+	ParentRoomID  *string               `json:"parent_room_id,omitempty"`
 	StateSchema   json.RawMessage       `json:"state_schema,omitempty"`
 	DefaultPolicy *domain.ContextPolicy `json:"default_policy,omitempty"`
 }
@@ -100,7 +123,7 @@ func (h *RoomHandler) UpdateRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
-	room, err := h.roomUsecase.UpdateRoom(c.Request().Context(), projectID, roomID, req.StateSchema, req.DefaultPolicy)
+	room, err := h.roomUsecase.UpdateRoom(c.Request().Context(), projectID, roomID, req.Description, req.ParentRoomID, req.StateSchema, req.DefaultPolicy)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

@@ -37,9 +37,19 @@ export interface ContextEvaluation {
   created_at: string;
 }
 
+export interface ChildAgentOverview {
+  room_id: string;
+  description: string;
+  status: string;
+  active_topic: string;
+  summary: string;
+}
+
 export interface RoomOverview {
   id: string;
   external_user_id: string;
+  description?: string;
+  parent_room_id?: string;
   active_topic: string;
   message_count: number;
   total_tokens_used?: number;
@@ -96,6 +106,8 @@ export interface RoomDetail {
     id: string;
     project_id: string;
     external_user_id: string;
+    description?: string;
+    parent_room_id?: string;
     created_at: string;
     updated_at: string;
     status?: string;
@@ -108,6 +120,7 @@ export interface RoomDetail {
   };
   state: RoomState | null;
   messages: Message[];
+  children?: ChildAgentOverview[];
 }
 
 export interface APIKey {

@@ -469,6 +469,16 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		processedTokens += len(mem.Content) / 4
 	}
 
+	var childAgents []domain.ChildAgentOverview
+	if req.IncludeChildren {
+		children, errChild := u.roomRepo.ListChildRooms(ctx, projectID, roomID)
+		if errChild == nil && len(children) > 0 {
+			childAgents = children
+		} else {
+			childAgents = []domain.ChildAgentOverview{}
+		}
+	}
+
 	pkg := &domain.ContextPackage{
 		RoomID:           roomID,
 		Summary:          state.Summary,
@@ -478,6 +488,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		Memories:         packedMemories,
 		Entities:         entities,
 		References:       references,
+		ChildAgents:      childAgents,
 		StrategyUsed:     strategy,
 		TokensEstimated:  estimatedTokens,
 		TokensProcessed:  processedTokens,

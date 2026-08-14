@@ -110,6 +110,7 @@ func main() {
 	projectHandler := handler.NewProjectHandler(authRepo, cfg.JWTSecret)
 	roomHandler := handler.NewRoomHandler(roomUsecase)
 	messageHandler := handler.NewMessageHandler(messageUsecase)
+	artifactHandler := handler.NewArtifactHandler(artifactUsecase)
 	contextHandler := handler.NewContextHandler(contextUsecase)
 	eventHandler := handler.NewEventHandler(eventUsecase, eventBroker)
 	dashboardHandler := handler.NewDashboardHandler(usageUsecase, roomUsecase, messageUsecase, roomRepo, storageProvider, evalRepo)
@@ -120,7 +121,7 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete, http.MethodOptions},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, "X-Project-ID", "X-API-Key", "X-Encryption-Key"},
 	}))
 
@@ -150,13 +151,24 @@ func main() {
 	v1.POST("/projects/:project_id/api-keys", projectHandler.CreateAPIKey)
 	v1.DELETE("/projects/:project_id/api-keys/:key_id", projectHandler.RevokeAPIKey)
 
-	// Rooms API
+	// Artifacts & Core Memory API
+	v1.POST("/projects/:project_id/artifacts", artifactHandler.CreateArtifact)
+	v1.GET("/projects/:project_id/artifacts", artifactHandler.ListArtifacts)
+	v1.GET("/projects/:project_id/artifacts/graph", artifactHandler.GetKnowledgeGraph)
+	v1.GET("/projects/:project_id/artifacts/:artifact_id", artifactHandler.GetArtifact)
+	v1.PUT("/projects/:project_id/artifacts/:artifact_id", artifactHandler.UpdateArtifact)
+	v1.DELETE("/projects/:project_id/artifacts/:artifact_id", artifactHandler.DeleteArtifact)
+
+	// Rooms API & Blacklists
 	v1.POST("/rooms", roomHandler.CreateRoom)
 	v1.GET("/rooms/:room_id", roomHandler.GetRoomState)
 	v1.GET("/rooms/:room_id/children", roomHandler.GetChildRooms)
 	v1.PATCH("/rooms/:room_id", roomHandler.UpdateRoom)
 	v1.DELETE("/rooms/:room_id", roomHandler.DeleteRoom)
 	v1.POST("/rooms/:room_id/warmup", contextHandler.WarmupRoom)
+	v1.POST("/rooms/:room_id/blacklist", artifactHandler.AddRoomBlacklist)
+	v1.GET("/rooms/:room_id/blacklist", artifactHandler.GetRoomBlacklists)
+	v1.DELETE("/rooms/:room_id/blacklist/:blacklist_id", artifactHandler.RemoveRoomBlacklist)
 
 	// Messages API
 	v1.POST("/rooms/:room_id/messages", messageHandler.CreateMessage)

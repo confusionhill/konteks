@@ -94,7 +94,11 @@ export async function fetchArtifacts(projectId: string, groupName?: string): Pro
   if (!res.ok) {
     throw new Error(`Failed to fetch artifacts: ${res.statusText}`);
   }
-  return res.json();
+  const data = await res.json();
+  return {
+    artifacts: data.artifacts || [],
+    total: data.total || 0,
+  };
 }
 
 export async function fetchArtifactDetail(projectId: string, artifactId: string): Promise<Artifact> {
@@ -147,7 +151,11 @@ export async function fetchKnowledgeGraph(projectId: string): Promise<KnowledgeG
   if (!res.ok) {
     throw new Error(`Failed to fetch knowledge graph: ${res.statusText}`);
   }
-  return res.json();
+  const data = await res.json();
+  return {
+    nodes: data.nodes || [],
+    edges: data.edges || [],
+  };
 }
 
 export async function fetchRoomBlacklists(roomId: string): Promise<RoomArtifactBlacklist[]> {

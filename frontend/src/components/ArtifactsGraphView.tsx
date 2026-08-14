@@ -17,28 +17,31 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [zoom, setZoom] = useState(1);
 
+  const nodesList = useMemo(() => graph?.nodes || [], [graph]);
+  const edgesList = useMemo(() => graph?.edges || [], [graph]);
+
   // Group options
   const groups = useMemo(() => {
     const set = new Set<string>();
-    graph?.nodes.forEach((n) => {
+    nodesList.forEach((n) => {
       if (n.group_name) set.add(n.group_name);
     });
     return Array.from(set);
-  }, [graph]);
+  }, [nodesList]);
 
   // Compute 2D Positions for SVG Nodes using force layout positioning
   const nodePositions = useMemo(() => {
-    if (!graph || graph.nodes.length === 0) return new Map();
+    if (nodesList.length === 0) return new Map();
 
     const positions = new Map<string, { x: number; y: number }>();
-    const total = graph.nodes.length;
+    const total = nodesList.length;
     const width = 800;
     const height = 500;
     const centerX = width / 2;
     const centerY = height / 2;
     const radius = Math.min(width, height) * 0.35;
 
-    graph.nodes.forEach((node, idx) => {
+    nodesList.forEach((node, idx) => {
       const angle = (idx / total) * 2 * Math.PI;
       const x = centerX + radius * Math.cos(angle);
       const y = centerY + radius * Math.sin(angle);
@@ -46,9 +49,9 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
     });
 
     return positions;
-  }, [graph]);
+  }, [nodesList]);
 
-  if (!graph || graph.nodes.length === 0) {
+  if (!graph || nodesList.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-slate-950/40 rounded-xl border border-slate-800 text-center">
         <Network className="w-12 h-12 text-slate-600 mb-3" />
@@ -60,10 +63,10 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
     );
   }
 
-  const filteredNodes = graph.nodes.filter((node) => {
+  const filteredNodes = nodesList.filter((node) => {
     const matchesSearch =
-      node.file_path.toLowerCase().includes(search.toLowerCase()) ||
-      node.title.toLowerCase().includes(search.toLowerCase());
+      (node.file_path || '').toLowerCase().includes(search.toLowerCase()) ||
+      (node.title || '').toLowerCase().includes(search.toLowerCase());
     const matchesGroup = selectedGroup === 'all' || node.group_name === selectedGroup;
     return matchesSearch && matchesGroup;
   });
@@ -93,7 +96,7 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
               onChange={(e) => setSelectedGroup(e.target.value)}
               className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
             >
-              <option value="all">All Groups ({graph.nodes.length})</option>
+              <option value="all">All Groups ({nodesList.length})</option>
               {groups.map((g) => (
                 <option key={g} value={g}>
                   Group: {g}
@@ -149,7 +152,7 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
           </defs>
 
           {/* Render Graph Edges */}
-          {graph.edges.map((edge, i) => {
+          {edgesList.map((edge, i) => {
             const srcPos = nodePositions.get(edge.source);
             const tgtPos = nodePositions.get(edge.target);
             if (!srcPos || !tgtPos) return null;
@@ -174,7 +177,7 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
           })}
 
           {/* Render Graph Nodes */}
-          {graph.nodes.map((node) => {
+          {nodesList.map((node) => {
             const pos = nodePositions.get(node.id);
             if (!pos) return null;
 

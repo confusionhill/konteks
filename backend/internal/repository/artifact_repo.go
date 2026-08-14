@@ -279,9 +279,9 @@ func (r *artifactRepository) ListArtifacts(ctx context.Context, projectID string
 		return nil, 0, err
 	}
 
-	artifacts := make([]domain.Artifact, len(rows))
-	for i, r := range rows {
-		artifacts[i] = mapDBArtifactRow(r)
+	artifacts := make([]domain.Artifact, 0, len(rows))
+	for _, r := range rows {
+		artifacts = append(artifacts, mapDBArtifactRow(r))
 	}
 	return artifacts, total, nil
 }
@@ -498,22 +498,22 @@ func (r *artifactRepository) GetKnowledgeGraph(ctx context.Context, projectID st
 		return nil, err
 	}
 
-	nodes := make([]domain.GraphNode, len(dbNodes))
-	for i, n := range dbNodes {
-		nodes[i] = domain.GraphNode{
+	nodes := make([]domain.GraphNode, 0, len(dbNodes))
+	for _, n := range dbNodes {
+		nodes = append(nodes, domain.GraphNode{
 			ID:        n.ID,
 			FilePath:  n.FilePath,
 			Title:     n.Title,
 			GroupName: n.GroupName,
-		}
+		})
 	}
-	edges := make([]domain.GraphEdge, len(dbEdges))
-	for i, e := range dbEdges {
-		edges[i] = domain.GraphEdge{
+	edges := make([]domain.GraphEdge, 0, len(dbEdges))
+	for _, e := range dbEdges {
+		edges = append(edges, domain.GraphEdge{
 			Source:       e.Source,
 			Target:       e.Target,
 			Relationship: e.Relationship,
-		}
+		})
 	}
 
 	return &domain.KnowledgeGraph{

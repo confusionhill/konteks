@@ -53,11 +53,13 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
 
   if (!graph || nodesList.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-slate-950/40 rounded-xl border border-slate-800 text-center">
-        <Network className="w-12 h-12 text-slate-600 mb-3" />
-        <h3 className="text-base font-semibold text-slate-300">No Knowledge Graph Nodes Yet</h3>
-        <p className="text-xs text-slate-500 max-w-sm mt-1">
-          Upload Markdown files with links like <span className="font-mono text-indigo-400">[Link](docs/auth.md)</span> to automatically construct a memory reference graph.
+      <div className="bg-white rounded-2xl p-12 border border-slate-200/80 shadow-soft text-center">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center mx-auto mb-3">
+          <Network className="w-6 h-6" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">No Knowledge Graph Nodes Yet</h3>
+        <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+          Upload Markdown files with links like <span className="font-mono text-indigo-600 font-semibold">[Link](docs/auth.md)</span> to automatically construct a memory reference graph.
         </p>
       </div>
     );
@@ -74,9 +76,9 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
   const filteredNodeIDs = new Set(filteredNodes.map((n) => n.id));
 
   return (
-    <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-xl flex flex-col">
+    <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-soft flex flex-col">
       {/* Controls Bar */}
-      <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-900/60">
+      <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
         <div className="flex items-center gap-3 flex-1 min-w-[240px]">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -85,7 +87,7 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search graph nodes..."
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
             />
           </div>
 
@@ -94,7 +96,7 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
             <select
               value={selectedGroup}
               onChange={(e) => setSelectedGroup(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
+              className="bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
             >
               <option value="all">All Groups ({nodesList.length})</option>
               {groups.map((g) => (
@@ -106,24 +108,24 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setZoom((z) => Math.min(z + 0.2, 2))}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition-colors"
+            className="p-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg transition-colors"
             title="Zoom In"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
             onClick={() => setZoom((z) => Math.max(z - 0.2, 0.6))}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition-colors"
+            className="p-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg transition-colors"
             title="Zoom Out"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
           <button
             onClick={() => setZoom(1)}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition-colors"
+            className="p-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg transition-colors"
             title="Reset Zoom"
           >
             <RefreshCw className="w-4 h-4" />
@@ -132,7 +134,7 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
       </div>
 
       {/* SVG Interactive Canvas */}
-      <div className="relative w-full h-[520px] bg-slate-950/80 overflow-hidden flex items-center justify-center">
+      <div className="relative w-full h-[520px] bg-slate-50/40 overflow-hidden flex items-center justify-center">
         <svg
           className="w-full h-full cursor-grab active:cursor-grabbing transition-transform duration-200 ease-out"
           viewBox="0 0 800 500"
@@ -147,7 +149,7 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
               refY="3.5"
               orient="auto"
             >
-              <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1" opacity="0.8" />
+              <polygon points="0 0, 10 3.5, 0 7" fill="#4f46e5" opacity="0.8" />
             </marker>
           </defs>
 
@@ -166,11 +168,11 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
                   y1={srcPos.y}
                   x2={tgtPos.x}
                   y2={tgtPos.y}
-                  stroke={isHighlighted ? '#6366f1' : '#334155'}
-                  strokeWidth={isHighlighted ? 2 : 1}
+                  stroke={isHighlighted ? '#4f46e5' : '#cbd5e1'}
+                  strokeWidth={isHighlighted ? 2.5 : 1.5}
                   strokeDasharray={edge.relationship === 'refers_to' ? 'none' : '4,4'}
                   markerEnd="url(#arrowhead)"
-                  opacity={isHighlighted ? 0.85 : 0.3}
+                  opacity={isHighlighted ? 0.9 : 0.5}
                 />
               </g>
             );
@@ -190,25 +192,25 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
                 transform={`translate(${pos.x}, ${pos.y})`}
                 onClick={() => art && onSelectArtifact(art)}
                 className={`cursor-pointer transition-all duration-200 ${
-                  isMatch ? 'opacity-100' : 'opacity-30'
+                  isMatch ? 'opacity-100' : 'opacity-40'
                 }`}
               >
                 {/* Node Outer Ring */}
                 <circle
                   r={22}
-                  className="fill-slate-900 stroke-indigo-500/50 hover:stroke-indigo-400 hover:scale-110 transition-all"
-                  strokeWidth={2}
+                  className="fill-white stroke-indigo-500 hover:stroke-indigo-600 hover:scale-110 transition-all shadow-md"
+                  strokeWidth={2.5}
                 />
-                <circle r={14} className="fill-indigo-600/20" />
+                <circle r={14} className="fill-indigo-50" />
 
                 {/* Node Icon Accent */}
-                <circle r={6} className="fill-indigo-400" />
+                <circle r={6} className="fill-indigo-600" />
 
                 {/* Node File Path Text */}
                 <text
-                  y={34}
+                  y={36}
                   textAnchor="middle"
-                  className="fill-slate-200 text-[10px] font-mono font-medium tracking-tight drop-shadow-md"
+                  className="fill-slate-900 text-[11px] font-mono font-bold tracking-tight"
                 >
                   {node.file_path}
                 </text>
@@ -218,18 +220,18 @@ export const ArtifactsGraphView: React.FC<ArtifactsGraphViewProps> = ({
         </svg>
 
         {/* Floating Legend */}
-        <div className="absolute bottom-4 left-4 bg-slate-900/90 border border-slate-800 px-3 py-2 rounded-lg backdrop-blur-md text-[11px] text-slate-400 flex items-center gap-4">
+        <div className="absolute bottom-4 left-4 bg-white/90 border border-slate-200 px-3.5 py-2 rounded-xl backdrop-blur-md text-[11px] font-medium text-slate-600 flex items-center gap-4 shadow-soft">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block" />
             <span>Artifact Node</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-indigo-500 inline-block" />
+            <span className="w-4 h-0.5 bg-indigo-600 inline-block" />
             <span>Refers To Link</span>
           </div>
           <div className="flex items-center gap-1">
-            <LinkIcon className="w-3 h-3 text-indigo-400" />
-            <span>Click node to view memory</span>
+            <LinkIcon className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Click node to view</span>
           </div>
         </div>
       </div>

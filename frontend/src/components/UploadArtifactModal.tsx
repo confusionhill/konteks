@@ -63,7 +63,6 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
       });
       onSuccess();
       onClose();
-      // Reset form
       setFilePath('');
       setTitle('');
       setGroupName('');
@@ -76,28 +75,28 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl relative my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto font-sans">
+      <div className="bg-white border border-slate-200/80 rounded-2xl max-w-2xl w-full p-6 shadow-lifted relative my-8">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 transition-colors"
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors p-1"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+          <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100">
             <FileText className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-slate-100">Upload Markdown Memory Artifact</h2>
-            <p className="text-sm text-slate-400">Add durable indexed .md context for your AI agent</p>
+            <h2 className="text-xl font-bold text-slate-900">Upload Markdown Memory Artifact</h2>
+            <p className="text-xs text-slate-500">Add durable indexed .md context for your AI agent</p>
           </div>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+          <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2 font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
             <span>{error}</span>
           </div>
         )}
@@ -105,33 +104,33 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                File Path <span className="text-red-400">*</span>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                File Path <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 value={filePath}
                 onChange={(e) => setFilePath(e.target.value)}
                 placeholder="e.g. docs/auth.md or rules/api.md"
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Title</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Authentication Specification"
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
               Group / Folder Tag (Optional)
             </label>
             <input
@@ -139,16 +138,16 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               placeholder="e.g. security or user_rules"
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-medium text-slate-300">
-                Markdown Content <span className="text-red-400">*</span>
+              <label className="block text-xs font-semibold text-slate-700">
+                Markdown Content <span className="text-rose-500">*</span>
               </label>
-              <label className="cursor-pointer text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+              <label className="cursor-pointer text-xs text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-1">
                 <Upload className="w-3.5 h-3.5" />
                 <span>Upload .md file</span>
                 <input type="file" accept=".md,.markdown,.txt" onChange={handleFileUpload} className="hidden" />
@@ -159,23 +158,23 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
               onChange={(e) => setContent(e.target.value)}
               rows={10}
               placeholder="Paste raw markdown content here... (supports YAML frontmatter and syntax links e.g. [Auth Spec](docs/auth.md))"
-              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               required
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-button transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               {loading ? (
                 <span>Indexing...</span>

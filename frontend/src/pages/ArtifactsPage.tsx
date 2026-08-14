@@ -90,23 +90,25 @@ export const ArtifactsPage: React.FC = () => {
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6 font-sans">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-soft flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-1">
-            <Brain className="w-4 h-4" />
+          <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100 inline-flex items-center gap-1.5">
+            <Brain className="w-3.5 h-3.5" />
             <span>Memory & Context Infrastructure</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-100">Project Core Memory Artifacts</h1>
-          <p className="text-xs text-slate-400 mt-1">
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans mt-2">
+            Project Core Memory Artifacts
+          </h1>
+          <p className="text-sm font-medium text-slate-500 mt-1">
             Indexed Markdown documents (.md) powering durable long-form knowledge and graph retrieval
           </p>
         </div>
 
         <button
           onClick={() => setIsUploadOpen(true)}
-          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2"
+          className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-semibold text-xs rounded-xl shadow-button transition-all duration-150 flex items-center justify-center gap-2 shrink-0"
         >
           <Upload className="w-4 h-4" />
           <span>Upload Markdown Memory</span>
@@ -114,20 +116,20 @@ export const ArtifactsPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 shrink-0" />
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-4 flex items-center space-x-3 text-sm">
+          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800">
+      {/* Tabs Bar */}
+      <div className="flex items-center space-x-2 border-b border-slate-200 pb-px">
         <button
           onClick={() => setActiveTab('explorer')}
-          className={`px-4 py-2.5 font-medium text-xs rounded-t-lg transition-colors flex items-center gap-2 border-b-2 ${
+          className={`px-4 py-2.5 font-semibold text-xs rounded-t-xl transition-all duration-150 flex items-center space-x-2 border-b-2 ${
             activeTab === 'explorer'
-              ? 'border-indigo-500 text-indigo-400 bg-slate-900/50'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
           }`}
         >
           <FileText className="w-4 h-4" />
@@ -136,10 +138,10 @@ export const ArtifactsPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('graph')}
-          className={`px-4 py-2.5 font-medium text-xs rounded-t-lg transition-colors flex items-center gap-2 border-b-2 ${
+          className={`px-4 py-2.5 font-semibold text-xs rounded-t-xl transition-all duration-150 flex items-center space-x-2 border-b-2 ${
             activeTab === 'graph'
-              ? 'border-indigo-500 text-indigo-400 bg-slate-900/50'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
           }`}
         >
           <Network className="w-4 h-4" />
@@ -148,10 +150,10 @@ export const ArtifactsPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('facts')}
-          className={`px-4 py-2.5 font-medium text-xs rounded-t-lg transition-colors flex items-center gap-2 border-b-2 ${
+          className={`px-4 py-2.5 font-semibold text-xs rounded-t-xl transition-all duration-150 flex items-center space-x-2 border-b-2 ${
             activeTab === 'facts'
-              ? 'border-indigo-500 text-indigo-400 bg-slate-900/50'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
           }`}
         >
           <Brain className="w-4 h-4" />
@@ -162,7 +164,7 @@ export const ArtifactsPage: React.FC = () => {
       {/* Tab 1: File Explorer & Table */}
       {activeTab === 'explorer' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-soft flex items-center justify-between gap-4">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -170,13 +172,13 @@ export const ArtifactsPage: React.FC = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search file path or title..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
             </div>
             <select
               value={selectedGroup}
               onChange={(e) => setSelectedGroup(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500"
+              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
             >
               <option value="">All Group Folders</option>
               <option value="security">security</option>
@@ -185,26 +187,30 @@ export const ArtifactsPage: React.FC = () => {
           </div>
 
           {loading ? (
-            <div className="p-12 text-center text-sm text-slate-400">Loading memory artifacts...</div>
+            <div className="p-12 text-center text-sm font-medium text-slate-500 bg-white rounded-2xl border border-slate-200/80 shadow-soft">
+              Loading memory artifacts...
+            </div>
           ) : filteredArtifacts.length === 0 ? (
-            <div className="p-12 text-center bg-slate-950/40 rounded-xl border border-slate-800">
-              <Folder className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-              <h3 className="text-base font-semibold text-slate-300">No Markdown Artifacts Found</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-soft p-12 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center mx-auto mb-3">
+                <Folder className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">No Markdown Artifacts Found</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-5">
                 Upload your project rules, API specs, or system documentation to enable deep memory retrieval.
               </p>
               <button
                 onClick={() => setIsUploadOpen(true)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-button transition-colors"
               >
                 Upload First .md Artifact
               </button>
             </div>
           ) : (
-            <div className="bg-slate-900/70 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-soft">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/60 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
                     <th className="p-4">File Path</th>
                     <th className="p-4">Title</th>
                     <th className="p-4">Group</th>
@@ -213,40 +219,40 @@ export const ArtifactsPage: React.FC = () => {
                     <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60 text-xs text-slate-300">
+                <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                   {filteredArtifacts.map((art) => (
                     <tr
                       key={art.id}
-                      className="hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      className="hover:bg-slate-50/60 transition-colors cursor-pointer"
                       onClick={() => handleInspect(art)}
                     >
-                      <td className="p-4 font-mono font-medium text-indigo-400 flex items-center gap-2">
+                      <td className="p-4 font-mono font-bold text-indigo-600 flex items-center gap-2">
                         <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
                         <span>{art.file_path}</span>
                       </td>
-                      <td className="p-4 font-semibold text-slate-200">{art.title}</td>
+                      <td className="p-4 font-semibold text-slate-900">{art.title}</td>
                       <td className="p-4">
-                        <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[11px] border border-slate-700">
+                        <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200">
                           {art.group_name || 'General'}
                         </span>
                       </td>
-                      <td className="p-4 font-mono text-slate-400">{art.chunks_count || 1} chunks</td>
-                      <td className="p-4 text-slate-400">{new Date(art.updated_at).toLocaleDateString()}</td>
+                      <td className="p-4 font-mono text-slate-500">{art.chunks_count || 1} chunks</td>
+                      <td className="p-4 text-slate-500">{new Date(art.updated_at).toLocaleDateString()}</td>
                       <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setEditingArtifact(art)}
-                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition-colors"
+                            className="p-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-lg transition-colors"
                             title="Edit Artifact"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Edit3 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(art.id)}
-                            className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md transition-colors"
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
                             title="Delete Artifact"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>

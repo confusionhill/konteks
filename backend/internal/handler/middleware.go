@@ -89,6 +89,7 @@ func AuthMiddleware(authRepo domain.AuthRepository, jwtSecret string) echo.Middl
 			})
 
 			if err != nil || !token.Valid {
+				log.Printf("[AuthMiddleware] JWT parse error: %v (valid: %v)", err, token.Valid)
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired JWT token"})
 			}
 

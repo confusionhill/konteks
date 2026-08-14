@@ -17,8 +17,27 @@
       </p>
     </div>
 
-    <!-- 4 Bento Grid Cards -->
+    <!-- Bento Grid Cards -->
     <div class="grid md:grid-cols-2 gap-8">
+      
+      <!-- Flagship E2EE Feature Card (Full Width) -->
+      <div class="md:col-span-2 bg-gradient-to-r from-slate-900 to-indigo-950 p-8 rounded-xl border border-indigo-500/30 text-white shadow-xl hover:-translate-y-0.5 transition-all duration-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden group">
+        <div class="space-y-3 max-w-2xl z-10">
+          <div class="flex items-center gap-2">
+            <span class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-base">🔐</span>
+            <span class="text-xs font-mono font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/80 px-2.5 py-1 rounded border border-indigo-500/30">Optional Module • Paid Tiers</span>
+          </div>
+          <h3 class="text-2xl sm:text-3xl font-extrabold text-white">Zero-Trust E2EE & Encrypted Vector Search</h3>
+          <p class="text-slate-300 text-sm leading-relaxed">
+            Encrypt message payloads with AES-256-GCM envelope encryption and perform distance-preserving vector search using orthonormal matrix rotation (<code class="text-indigo-300 bg-slate-800 px-1 py-0.5 rounded font-mono">R · v</code>). Konteks operates as a 100% Zero-Knowledge platform.
+          </p>
+        </div>
+        <div class="shrink-0 z-10">
+          <a href="#security-e2ee" class="inline-flex items-center gap-2 text-xs font-mono font-bold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 rounded-lg transition-colors shadow-md">
+            Learn Security Architecture &rarr;
+          </a>
+        </div>
+      </div>
       
       <!-- Feature 1 -->
       <div class="bg-white p-8 rounded-xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
@@ -64,7 +83,7 @@
           </p>
         </div>
         <div class="mt-6 pt-4 border-t border-slate-100 text-xs font-mono text-indigo-600 font-semibold">
-          ✓ Zero-latency background summarizer
+          ✓ Async background summarizer
         </div>
       </div>
 

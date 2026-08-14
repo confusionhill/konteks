@@ -66,7 +66,7 @@ export default function HeroPreview() {
 
             <div className="pt-2 flex items-center justify-between text-[11px] text-slate-500">
               <span>Token Savings: <strong className="text-emerald-600">96.4% lower cost</strong></span>
-              <span>Retrieval Latency: <strong className="text-indigo-600">18ms</strong></span>
+              <span>State Resolution: <strong className="text-indigo-600">Active & Compact</strong></span>
             </div>
           </div>
         ) : (

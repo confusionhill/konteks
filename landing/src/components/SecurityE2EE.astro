@@ -1,0 +1,120 @@
+---
+---
+
+<section id="security-e2ee" class="py-20 md:py-28 bg-slate-950 text-white relative overflow-hidden border-t border-slate-800">
+  <!-- Glowing Background Gradients -->
+  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-indigo-600/10 via-violet-600/5 to-transparent blur-3xl pointer-events-none"></div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+    
+    <!-- Section Header -->
+    <div class="text-center max-w-3xl mx-auto space-y-4 mb-16">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 text-xs font-bold uppercase tracking-wider shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
+        <span>Optional Security Module • Pro & Enterprise</span>
+      </div>
+
+      <h2 class="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
+        Zero-Trust E2EE & <br class="hidden sm:inline" />
+        <span class="bg-gradient-to-r from-indigo-400 via-violet-400 to-indigo-300 bg-clip-text text-transparent">
+          Encrypted Vector Search
+        </span>
+      </h2>
+
+      <p class="text-slate-400 text-base sm:text-lg leading-relaxed">
+        The only AI context platform where you can run stateful agents with <strong class="text-white">Zero-Knowledge guarantees</strong>. Your messages, state variables, and semantic vectors stay end-to-end encrypted.
+      </p>
+    </div>
+
+    <!-- 3 Core Security Pillars -->
+    <div class="grid md:grid-cols-3 gap-8 mb-16">
+      
+      <!-- Pillar 1 -->
+      <div class="bg-slate-900/80 p-8 rounded-2xl border border-slate-800/80 hover:border-indigo-500/40 transition-all duration-300 hover:-translate-y-1 group">
+        <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xl mb-6 group-hover:scale-110 transition-transform">
+          🔑
+        </div>
+        <h3 class="text-xl font-bold text-white mb-3">AES-256-GCM Envelope Encryption</h3>
+        <p class="text-slate-400 text-sm leading-relaxed mb-4">
+          Payloads are encrypted locally on the SDK using client-controlled keys (<code class="text-indigo-300 bg-indigo-950/60 px-1.5 py-0.5 rounded text-xs font-mono">K_room</code>). Konteks DB stores only encrypted ciphertexts.
+        </p>
+        <span class="inline-flex items-center gap-1.5 text-xs font-mono text-indigo-400 font-semibold">
+          ✓ Client Key Derivation (HKDF)
+        </span>
+      </div>
+
+      <!-- Pillar 2 -->
+      <div class="bg-slate-900/80 p-8 rounded-2xl border border-slate-800/80 hover:border-violet-500/40 transition-all duration-300 hover:-translate-y-1 group">
+        <div class="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center font-bold text-xl mb-6 group-hover:scale-110 transition-transform">
+          📐
+        </div>
+        <h3 class="text-xl font-bold text-white mb-3">Encrypted Vector Search (R · v)</h3>
+        <p class="text-slate-400 text-sm leading-relaxed mb-4">
+          Secret orthonormal matrix rotation (<code class="text-violet-300 bg-violet-950/60 px-1.5 py-0.5 rounded text-xs font-mono">R · v</code>) preserves exact cosine distance for <code class="text-violet-300">pgvector</code> search with <strong>0% precision loss</strong>—shielding vectors from inversion attacks.
+        </p>
+        <span class="inline-flex items-center gap-1.5 text-xs font-mono text-violet-400 font-semibold">
+          ✓ Distance-Preserving Cosine Search
+        </span>
+      </div>
+
+      <!-- Pillar 3 -->
+      <div class="bg-slate-900/80 p-8 rounded-2xl border border-slate-800/80 hover:border-emerald-500/40 transition-all duration-300 hover:-translate-y-1 group">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xl mb-6 group-hover:scale-110 transition-transform">
+          🛡️
+        </div>
+        <h3 class="text-xl font-bold text-white mb-3">Confidential Hardware Enclaves</h3>
+        <p class="text-slate-400 text-sm leading-relaxed mb-4">
+          Background state extraction runs within confidential CPU enclaves (AWS Nitro / AMD SEV). Plaintext exists strictly in CPU cache memory—isolated from platform OS & DB admins.
+        </p>
+        <span class="inline-flex items-center gap-1.5 text-xs font-mono text-emerald-400 font-semibold">
+          ✓ Zero Platform Visibility
+        </span>
+      </div>
+
+    </div>
+
+    <!-- Code & Schema Comparison Graphic -->
+    <div class="max-w-5xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-6 border-b border-slate-800 gap-4">
+        <div>
+          <span class="text-xs font-mono uppercase tracking-wider text-indigo-400 font-bold block mb-1">Architecture Comparison</span>
+          <h4 class="text-lg font-bold text-white">What Konteks Sees vs What Your SDK Receives</h4>
+        </div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-semibold">
+          🔒 100% Zero-Knowledge Platform
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6 font-mono text-xs">
+        
+        <!-- Left: What Konteks DB Stores -->
+        <div class="space-y-3 p-4 rounded-xl bg-slate-950 border border-slate-800">
+          <div class="flex items-center justify-between text-slate-400 font-bold text-[11px] pb-2 border-b border-slate-800">
+            <span>KONTEKS DATABASE VIEW</span>
+            <span class="text-red-400">Ciphertext Only</span>
+          </div>
+          <div class="space-y-2 text-slate-400">
+            <p><span class="text-slate-500">content:</span> <span class="text-amber-300 font-mono text-[10.5px]">"v1:AES-256-GCM:eyJhbGciOiJBR..."</span></p>
+            <p><span class="text-slate-500">state:</span> <span class="text-amber-300 font-mono text-[10.5px]">"v1:AES-256-GCM:9f2a8c1e0b..."</span></p>
+            <p><span class="text-slate-500">embedding:</span> <span class="text-violet-400 font-mono text-[10.5px]">[0.0841, -0.9123, 0.4120, ...]</span> <span class="text-slate-600 block text-[10px]">(Rotated R · v)</span></p>
+          </div>
+        </div>
+
+        <!-- Right: What SDK Decrypts -->
+        <div class="space-y-3 p-4 rounded-xl bg-slate-950 border border-indigo-500/30">
+          <div class="flex items-center justify-between text-slate-400 font-bold text-[11px] pb-2 border-b border-slate-800">
+            <span>CLIENT SDK DECRYPTED VIEW</span>
+            <span class="text-emerald-400">Decrypted Package</span>
+          </div>
+          <div class="space-y-2 text-slate-300">
+            <p><span class="text-indigo-400">summary:</span> "User seeking hotel in Bali &lt;$150/night."</p>
+            <p><span class="text-indigo-400">active_state:</span> {"{ location: 'Bali', budget: 150 }"}</p>
+            <p><span class="text-indigo-400">relevance_score:</span> <span class="text-emerald-400 font-bold">0.9841 (Exact Match)</span></p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { createArtifact } from '../api/artifacts';
 
@@ -15,21 +15,19 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  // ALL HOOKS MUST BE DECLARED UNCONDITIONALLY BEFORE ANY EARLY RETURN!
   const [filePath, setFilePath] = useState('');
   const [title, setTitle] = useState('');
   const [groupName, setGroupName] = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processFile = (file: File) => {
     if (!filePath) {
       setFilePath(`docs/${file.name}`);
     }
@@ -44,33 +42,35 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-
-    if (!filePath) {
-      setFilePath(`docs/${file.name}`);
+    if (file) {
+      processFile(file);
     }
-    if (!title) {
-      setTitle(file.name.replace(/\.md$/, ''));
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setContent(event.target.result as string);
-      }
-    };
-    reader.readAsText(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,6 +130,34 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
           </div>
         )}
 
+        {/* Drag & Drop Visual Target Zone */}
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`mb-4 p-5 rounded-2xl border-2 border-dashed transition-all cursor-pointer text-center flex flex-col items-center justify-center ${
+            isDragging
+              ? 'border-indigo-500 bg-indigo-50/80 scale-[1.01]'
+              : 'border-slate-200 hover:border-indigo-300 bg-slate-50/60 hover:bg-indigo-50/30'
+          }`}
+        >
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center mb-2">
+            <Upload className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-bold text-slate-800">
+            {isDragging ? 'Drop your .md file here!' : 'Click to select or drag & drop a .md file'}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Supports .md, .markdown, .txt files</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,.markdown,.txt"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -172,34 +200,18 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-semibold text-slate-700">
-                Markdown Content <span className="text-rose-500">*</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="cursor-pointer text-xs text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-2.5 py-1 rounded-lg transition-colors"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload .md file</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".md,.markdown,.txt"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Markdown Content <span className="text-rose-500">*</span>
+            </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              rows={10}
-              placeholder="Paste raw markdown content here or drag & drop a .md file... (supports YAML frontmatter and syntax links e.g. [Auth Spec](docs/auth.md))"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-colors hover:border-indigo-300"
+              rows={8}
+              placeholder="Paste raw markdown content here... (supports YAML frontmatter and syntax links e.g. [Auth Spec](docs/auth.md))"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-colors"
               required
             />
           </div>

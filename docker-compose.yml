@@ -39,6 +39,7 @@ services:
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_S3_BUCKET=contextkit-archive
+      - JWT_SECRET=contextkit_super_secret_jwt_key_2026_change_in_prod
 
   minio:
     image: minio/minio:latest

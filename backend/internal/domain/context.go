@@ -49,7 +49,6 @@ type ContextPackage struct {
 type OpenRouterServiceClient interface {
 	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
 	ExtractStateAndSummary(ctx context.Context, history []Message, currentSummary string, schemaJSON string) (newSummary string, activeTopic string, updatedState string, salientFacts []string, err error)
-	ResolveReferences(ctx context.Context, history []Message, stateJSON string) (references map[string]string, entities []Entity, err error)
 	EvaluateContext(ctx context.Context, query string, contextPkg *ContextPackage) (*ContextEvaluation, error)
 }
 

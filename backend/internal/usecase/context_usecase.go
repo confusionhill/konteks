@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
@@ -216,30 +217,7 @@ func classifyStrategy(query string) string {
 	return "hybrid"
 }
 
-func hasPronouns(query string) bool {
-	q := strings.ToLower(strings.TrimSpace(query))
-	if q == "" {
-		return false
-	}
 
-	greetings := map[string]bool{
-		"hi": true, "hello": true, "hey": true, "yo": true, "greetings": true,
-		"thanks": true, "thank you": true, "ok": true, "okay": true, "yes": true, "no": true,
-		"help": true, "info": true, "start": true, "stop": true,
-	}
-	if greetings[q] {
-		return false
-	}
-
-	pronouns := []string{" it ", " that ", " which ", " this ", " them ", " option ", " same ", " the hotel ", " the flight ", " the room "}
-	padded := " " + q + " "
-	for _, p := range pronouns {
-		if strings.Contains(padded, p) {
-			return true
-		}
-	}
-	return false
-}
 
 func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string, roomID string, req domain.GetContextRequest) (*domain.ContextPackage, error) {
 	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
@@ -462,15 +440,22 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 
 		if req.Query != "" {
 			g.Go(func() error {
-				embedding, errEmbedding := u.openRouterClient.GenerateEmbedding(ctx, req.Query)
+				queryToEmbed := req.Query
+				if len(queryToEmbed) > 1000 {
+					queryToEmbed = queryToEmbed[:1000]
+				}
+
+				embedCtx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+				defer cancel()
+
+				embedding, errEmbedding := u.openRouterClient.GenerateEmbedding(embedCtx, queryToEmbed)
 				if errEmbedding != nil {
-					log.Printf("[Context Query Embedding Error]: %v", errEmbedding)
+					log.Printf("[Context Query Embedding Error / Timeout]: %v", errEmbedding)
 				} else {
 					var extUserID *string
 					if room.ExternalUserID != "" {
 						extUserID = &room.ExternalUserID
 					}
-					var errSearch error
 					memSearch, errSearch := u.memoryRepo.SearchSemantic(ctx, roomID, extUserID, embedding, policy.FreshnessWeight, memLimit)
 					if errSearch != nil {
 						log.Printf("[Context Memory Search Error]: %v", errSearch)
@@ -482,50 +467,12 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 			})
 		}
 
-		var refSuccess bool
-		var resolvedRefs map[string]string
-		var resolvedEnts []domain.Entity
-
-		if len(decryptedHistory) > 0 && hasPronouns(req.Query) {
-			currentStateStr := string(state.State)
-			g.Go(func() error {
-				log.Printf("[Context Engine]: Pronoun detected in query. Resolving references...")
-				refs, ents, errRef := u.openRouterClient.ResolveReferences(ctx, decryptedHistory, currentStateStr)
-				if errRef != nil {
-					log.Printf("[Reference Resolution Warning]: %v", errRef)
-				} else {
-					resolvedRefs = refs
-					resolvedEnts = ents
-					refSuccess = true
-				}
-				return nil
-			})
-		} else if len(history) > 0 {
-			references = state.References
-			entities = state.Entities
-			if references == nil {
-				references = make(map[string]string)
-			}
-		}
-
 		_ = g.Wait()
 
-		needsSave := false
 		if extractSuccess {
 			state.Summary = newSummary
 			state.ActiveTopic = activeTopic
 			state.State = json.RawMessage(extractedState)
-			needsSave = true
-		}
-		if refSuccess {
-			references = resolvedRefs
-			entities = resolvedEnts
-			state.References = references
-			state.Entities = entities
-			needsSave = true
-		}
-
-		if needsSave {
 			_ = u.roomRepo.UpsertState(ctx, state)
 		}
 

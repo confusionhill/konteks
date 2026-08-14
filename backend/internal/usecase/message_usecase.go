@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/dika/contextkit/backend/internal/config"
 	"github.com/dika/contextkit/backend/internal/domain"
@@ -74,14 +75,22 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		return
 	}
 
-	isLargeMessage := len(task.Content) > 2000
+	content := task.Content
+	if strings.HasPrefix(content, "enc_") && u.cryptoService != nil && u.cfg != nil {
+		key := u.cryptoService.ResolveKey("", u.cfg.EncryptionMasterKey)
+		if decrypted, errDec := u.cryptoService.Decrypt(content, "", key); errDec == nil {
+			content = decrypted
+		}
+	}
+
+	isLargeMessage := len(content) > 2000
 
 	if isLargeMessage {
-		if isSpam(task.Content) {
-			log.Printf("[Background Worker]: Message is large but flagged as spam/repetitive (len: %d). Skipping embeddings.", len(task.Content))
+		if isSpam(content) {
+			log.Printf("[Background Worker]: Message is large but flagged as spam/repetitive (len: %d). Skipping embeddings.", len(content))
 		} else {
-			log.Printf("[Background Worker]: Message is large (len: %d). Bypassing LLM fact extraction and chunking directly...", len(task.Content))
-			chunks := chunkText(task.Content, 2000, 200)
+			log.Printf("[Background Worker]: Message is large (len: %d). Bypassing LLM fact extraction and chunking directly...", len(content))
+			chunks := chunkText(content, 2000, 200)
 			for i, chunk := range chunks {
 				embedding, errEmb := u.openRouterClient.GenerateEmbedding(ctx, chunk)
 				if errEmb != nil {

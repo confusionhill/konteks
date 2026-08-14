@@ -52,29 +52,7 @@ export const StatePanel: React.FC<StatePanelProps> = ({ state }) => {
         </div>
       </div>
 
-      {/* Resolved References */}
-      <div>
-        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
-          <LinkIcon className="h-4 w-4 text-indigo-600" />
-          <span>Resolved References (Pronouns)</span>
-        </h4>
-        {references.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {references.map(([src, tgt]) => (
-              <span
-                key={src}
-                className="inline-flex items-center space-x-1.5 bg-indigo-50/80 border border-indigo-100 px-3 py-1 rounded-lg text-xs font-medium text-slate-800"
-              >
-                <span className="font-mono font-bold text-indigo-600">"{src}"</span>
-                <ArrowRight className="h-3 w-3 text-slate-400" />
-                <span className="font-semibold text-slate-900">{tgt}</span>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-slate-400 italic text-sm">No pronoun references resolved yet.</p>
-        )}
-      </div>
+
 
       {/* Summary Section */}
       <div>

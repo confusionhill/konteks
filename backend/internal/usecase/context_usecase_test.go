@@ -133,9 +133,7 @@ func (m *mockOpenRouter) GenerateEmbedding(ctx context.Context, text string) ([]
 func (m *mockOpenRouter) ExtractStateAndSummary(ctx context.Context, history []domain.Message, currentSummary string, schemaJSON string) (string, string, string, []string, error) {
 	return "summary", "topic", "{}", []string{}, nil
 }
-func (m *mockOpenRouter) ResolveReferences(ctx context.Context, history []domain.Message, stateJSON string) (map[string]string, []domain.Entity, error) {
-	return map[string]string{}, []domain.Entity{}, nil
-}
+
 func (m *mockOpenRouter) EvaluateContext(ctx context.Context, query string, contextPkg *domain.ContextPackage) (*domain.ContextEvaluation, error) {
 	return &domain.ContextEvaluation{}, nil
 }

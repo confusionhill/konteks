@@ -144,11 +144,7 @@ const ContextSnapshotViewer: React.FC<{ snapshot: any }> = ({ snapshot }) => {
         </SnapshotSection>
       )}
 
-      {s.references && Object.keys(s.references).length > 0 && (
-        <SnapshotSection label="References" count={Object.keys(s.references).length}>
-          <pre>{JSON.stringify(s.references, null, 2)}</pre>
-        </SnapshotSection>
-      )}
+
     </div>
   );
 };

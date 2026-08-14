@@ -24,8 +24,37 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
 
   if (!isOpen) return null;
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!filePath) {
+      setFilePath(`docs/${file.name}`);
+    }
+    if (!title) {
+      setTitle(file.name.replace(/\.md$/, ''));
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setContent(event.target.result as string);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
     if (!file) return;
 
     if (!filePath) {
@@ -147,18 +176,30 @@ export const UploadArtifactModal: React.FC<UploadArtifactModalProps> = ({
               <label className="block text-xs font-semibold text-slate-700">
                 Markdown Content <span className="text-rose-500">*</span>
               </label>
-              <label className="cursor-pointer text-xs text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="cursor-pointer text-xs text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-2.5 py-1 rounded-lg transition-colors"
+              >
                 <Upload className="w-3.5 h-3.5" />
                 <span>Upload .md file</span>
-                <input type="file" accept=".md,.markdown,.txt" onChange={handleFileUpload} className="hidden" />
-              </label>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".md,.markdown,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
             </div>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
               rows={10}
-              placeholder="Paste raw markdown content here... (supports YAML frontmatter and syntax links e.g. [Auth Spec](docs/auth.md))"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              placeholder="Paste raw markdown content here or drag & drop a .md file... (supports YAML frontmatter and syntax links e.g. [Auth Spec](docs/auth.md))"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-colors hover:border-indigo-300"
               required
             />
           </div>

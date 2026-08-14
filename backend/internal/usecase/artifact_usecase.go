@@ -267,15 +267,37 @@ func (u *artifactUsecase) IngestArtifact(ctx context.Context, projectID string, 
 		allRefsMap[r] = true
 	}
 
+	_ = u.artifactRepo.DeleteReferencesBySource(ctx, artifact.ID)
+
 	var targetIDs []string
 	for targetPath := range allRefsMap {
 		targetArt, _ := u.artifactRepo.GetArtifactByPath(ctx, projectID, targetPath)
-		if targetArt != nil {
+		if targetArt != nil && targetArt.ID != artifact.ID {
 			targetIDs = append(targetIDs, targetArt.ID)
 		}
 	}
 	if len(targetIDs) > 0 {
 		_ = u.artifactRepo.AddReferences(ctx, artifact.ID, targetIDs, "refers_to")
+	}
+
+	// Bi-directional reference resolution: link existing artifacts that reference this file
+	if allArts, _, errArts := u.artifactRepo.ListArtifacts(ctx, projectID, "", 100, 0); errArts == nil {
+		baseName := path.Base(req.FilePath)
+		for _, other := range allArts {
+			if other.ID == artifact.ID {
+				continue
+			}
+			if otherFull, errF := u.artifactRepo.GetArtifactByID(ctx, other.ID); errF == nil && otherFull != nil && otherFull.Content != "" {
+				_, otherBody := parseFrontmatter(otherFull.Content)
+				otherRefs := extractSyntaxReferences(otherBody)
+				for _, ref := range otherRefs {
+					if ref == req.FilePath || ref == baseName || path.Base(ref) == baseName {
+						_ = u.artifactRepo.AddReferences(ctx, other.ID, []string{artifact.ID}, "refers_to")
+						break
+					}
+				}
+			}
+		}
 	}
 
 	// Asynchronous Batch Embedding Generation

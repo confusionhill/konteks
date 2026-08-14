@@ -214,7 +214,9 @@ func (r *artifactRepository) GetArtifactByPath(ctx context.Context, projectID st
 		       (SELECT COUNT(*) FROM artifact_chunks c WHERE c.artifact_id = a.id) as chunks_count
 		FROM artifacts a
 		LEFT JOIN artifact_groups g ON a.group_id = g.id
-		WHERE a.project_id = $1 AND a.file_path = $2
+		WHERE a.project_id = $1 AND (a.file_path = $2 OR a.file_path LIKE '%/' || $2)
+		ORDER BY (CASE WHEN a.file_path = $2 THEN 0 ELSE 1 END)
+		LIMIT 1
 	`
 	var row dbArtifactRow
 	err := r.db.GetContext(ctx, &row, query, projectID, filePath)

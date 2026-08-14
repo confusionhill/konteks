@@ -79,7 +79,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* FIXED VERTICAL LEFT SIDEBAR */}
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-40 bg-white border-r border-slate-200/80 flex flex-col justify-between p-3 transition-all duration-300 ease-in-out shadow-soft ${
+        className={`fixed top-0 left-0 bottom-0 z-40 bg-white border-r border-slate-100 flex flex-col justify-between p-3 transition-all duration-300 ease-in-out ${
           collapsed ? 'w-16' : 'w-64'
         }`}
       >
@@ -89,7 +89,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex flex-col items-center justify-center my-1.5 relative group">
               <button
                 onClick={toggleSidebar}
-                className="relative h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-soft shrink-0 hover:scale-105 transition-all overflow-hidden"
+                className="relative h-10 w-10 rounded-xl bg-transparent hover:bg-slate-100 flex items-center justify-center shrink-0 hover:scale-105 transition-all overflow-hidden"
               >
                 {/* Default Logo Mark (fades out on hover) */}
                 <img
@@ -138,7 +138,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <div className="relative group flex justify-center">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="w-10 h-10 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 transition-all"
+                  className="w-10 h-10 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all"
                 >
                   <FolderKanban className="h-4 w-4 shrink-0" />
                 </button>
@@ -153,7 +153,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             ) : (
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-xs font-semibold text-slate-800 transition-all"
+                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-xs font-semibold text-slate-800 transition-all"
               >
                 <div className="flex items-center space-x-2 truncate">
                   <FolderKanban className="h-4 w-4 text-indigo-600 shrink-0" />

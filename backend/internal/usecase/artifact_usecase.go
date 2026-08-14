@@ -287,7 +287,7 @@ func (u *artifactUsecase) IngestArtifact(ctx context.Context, projectID string, 
 			if other.ID == artifact.ID {
 				continue
 			}
-			if otherFull, errF := u.artifactRepo.GetArtifactByID(ctx, other.ID); errF == nil && otherFull != nil && otherFull.Content != "" {
+			if otherFull, errF := u.GetArtifact(ctx, projectID, other.ID); errF == nil && otherFull != nil && otherFull.Content != "" {
 				_, otherBody := parseFrontmatter(otherFull.Content)
 				otherRefs := extractSyntaxReferences(otherBody)
 				for _, ref := range otherRefs {

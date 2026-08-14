@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, AlertCircle, Edit3 } from 'lucide-react';
 import type { Artifact } from '../api/artifacts';
-import { updateArtifact } from '../api/artifacts';
+import { fetchArtifactDetail, updateArtifact } from '../api/artifacts';
 
 interface ArtifactEditorModalProps {
   projectId: string;
@@ -23,15 +23,33 @@ export const ArtifactEditorModal: React.FC<ArtifactEditorModalProps> = ({
   const [groupName, setGroupName] = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fetchingContent, setFetchingContent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (artifact) {
       setTitle(artifact.title || '');
       setGroupName(artifact.group_name || '');
-      setContent(artifact.content || '');
+
+      if (artifact.content) {
+        setContent(artifact.content);
+      } else {
+        setFetchingContent(true);
+        fetchArtifactDetail(projectId, artifact.id)
+          .then((fullArt) => {
+            setTitle(fullArt.title || artifact.title || '');
+            setGroupName(fullArt.group_name || artifact.group_name || '');
+            setContent(fullArt.content || '');
+          })
+          .catch((err) => {
+            setError('Failed to load artifact content: ' + (err.message || 'Unknown error'));
+          })
+          .finally(() => {
+            setFetchingContent(false);
+          });
+      }
     }
-  }, [artifact]);
+  }, [artifact, projectId]);
 
   if (!isOpen || !artifact) return null;
 
@@ -112,12 +130,17 @@ export const ArtifactEditorModal: React.FC<ArtifactEditorModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Markdown Content</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700">Markdown Content</label>
+              {fetchingContent && <span className="text-xs font-semibold text-indigo-600 animate-pulse">Loading content...</span>}
+            </div>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={14}
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              placeholder={fetchingContent ? 'Loading markdown content...' : 'Markdown content...'}
+              disabled={fetchingContent}
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:opacity-60"
               required
             />
           </div>

@@ -275,34 +275,44 @@ func (u *artifactUsecase) IngestArtifact(ctx context.Context, projectID string, 
 		}
 	}
 	if len(targetIDs) > 0 {
-		_ = u.artifactRepo.AddReferences(ctx, artifactID, targetIDs, "refers_to")
+		_ = u.artifactRepo.AddReferences(ctx, artifact.ID, targetIDs, "refers_to")
 	}
 
 	// Asynchronous Batch Embedding Generation
 	chunks := chunkMarkdownByHeaders(body)
-	go u.asyncGenerateEmbeddingsAndSave(projectID, artifactID, chunks)
+	go u.asyncGenerateEmbeddingsAndSave(projectID, artifact.ID, chunks)
 
 	artifact.ChunksCount = len(chunks)
 	return artifact, nil
 }
 
 func (u *artifactUsecase) asyncGenerateEmbeddingsAndSave(projectID string, artifactID string, chunks []HeaderChunk) {
-	bgCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	bgCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	var dbChunks []domain.ArtifactChunk
+	targetDim := 0
+
 	for i, c := range chunks {
 		var emb []float32
 		if u.openRouterClient != nil {
-			e, err := u.openRouterClient.GenerateEmbedding(bgCtx, c.SectionHeading+"\n"+c.Content)
+			chunkCtx, chunkCancel := context.WithTimeout(bgCtx, 30*time.Second)
+			e, err := u.openRouterClient.GenerateEmbedding(chunkCtx, c.SectionHeading+"\n"+c.Content)
+			chunkCancel()
 			if err != nil {
-				log.Printf("[Artifact Async Embedding Error]: chunk %d: %v", i, err)
+				log.Printf("[Artifact Async Embedding Warning]: chunk %d embedding call failed: %v", i, err)
 			} else {
 				emb = e
 			}
 		}
-		if len(emb) == 0 {
-			emb = make([]float32, 4096) // fallback zero-vector
+		if len(emb) > 0 {
+			targetDim = len(emb)
+		} else if targetDim == 0 {
+			targetDim = 4096
+		}
+
+		if len(emb) == 0 || len(emb) != targetDim {
+			emb = make([]float32, targetDim)
 		}
 
 		dbChunks = append(dbChunks, domain.ArtifactChunk{
@@ -318,7 +328,7 @@ func (u *artifactUsecase) asyncGenerateEmbeddingsAndSave(projectID string, artif
 	if err := u.artifactRepo.CreateChunks(bgCtx, dbChunks); err != nil {
 		log.Printf("[Artifact Async Save Error]: failed saving chunks for artifact %s: %v", artifactID, err)
 	} else {
-		log.Printf("[Artifact Async Success]: indexed %d chunks for artifact %s", len(dbChunks), artifactID)
+		log.Printf("[Artifact Async Success]: indexed %d chunks for artifact %s (dim=%d)", len(dbChunks), artifactID, targetDim)
 	}
 }
 

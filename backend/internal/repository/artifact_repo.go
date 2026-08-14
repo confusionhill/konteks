@@ -77,8 +77,8 @@ func (r *artifactRepository) ListGroups(ctx context.Context, projectID string) (
 
 func (r *artifactRepository) CreateArtifact(ctx context.Context, artifact *domain.Artifact) error {
 	query := `
-		INSERT INTO artifacts (project_id, group_id, file_path, title, s3_key, content_hash, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO artifacts (id, project_id, group_id, file_path, title, s3_key, content_hash, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id, created_at, updated_at
 	`
 	metaJSON := artifact.Metadata
@@ -93,6 +93,7 @@ func (r *artifactRepository) CreateArtifact(ctx context.Context, artifact *domai
 	}
 	var ins Inserted
 	err := r.db.GetContext(ctx, &ins, query,
+		artifact.ID,
 		artifact.ProjectID,
 		artifact.GroupID,
 		artifact.FilePath,

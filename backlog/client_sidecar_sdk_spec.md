@@ -111,6 +111,29 @@ sequenceDiagram
 1. **Public HTTPS / Egress Gateway (Standard SaaS)**: Sidecar sends standard outbound HTTPS (Port 443) requests to `https://api.contextkit.com`.
 2. **AWS PrivateLink / GCP Private Service Connect (Enterprise Zero-Egress)**: Enterprise clients route outbound HTTPS traffic over private ENI endpoints without traversing the public internet.
 
+### 4.1 Scalable Connection Multiplexing (1 Million Rooms = 1 Connection)
+
+> [!IMPORTANT]
+> **No 1:1 Connection Overhead**: A project with 1,000,000 rooms does **NOT** spawn 1,000,000 WebSockets. The Client Sidecar opens **1 single persistent multiplexed connection per project** (`wss://api.contextkit.com/v1/projects/:project_id/ws`).
+
+- **Dormant Room Efficiency**: Inactive rooms consume **0 network bandwidth and 0 RAM**.
+- **Event-Driven Sweep Notifications**: ContextKit SaaS pushes a lightweight event over the single project multiplexed channel *only* when an active room crosses its turn threshold ($N=50$ turns):
+  ```json
+  {
+    "event": "context_health.sweep_triggered",
+    "project_id": "proj_123",
+    "room_id": "room_999",
+    "turn_count": 50
+  }
+  ```
+- **Stateless Async Batch Processing**: The Sidecar worker receives the event, fetches candidate memories for `room_999` over standard stateless HTTPS, processes contradictions in its local async task queue, and submits the update.
+
+| Scaling Metric | Naive 1:1 Architecture | ContextKit Multiplexed Architecture |
+| :--- | :--- | :--- |
+| **Rooms Managed** | 1,000,000 | 1,000,000 |
+| **WebSocket Connections** | 1,000,000 (Unscalable 💥) | **1 Single Project Multiplexed Tunnel** |
+| **Idle Memory Overhead** | ~2 GB to ~10 GB | **< 15 MB** |
+
 ---
 
 ## 5. Implementation Milestones

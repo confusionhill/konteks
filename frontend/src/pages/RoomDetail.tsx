@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { decryptAESGCM } from '../utils/crypto';
 import { RoomBlacklistPanel } from '../components/RoomBlacklistPanel';
+import { RoomMemoriesPanel } from '../components/RoomMemoriesPanel';
 
 interface SnapshotSection {
   label: string;
@@ -570,6 +571,9 @@ export const RoomDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Context Memories & Supersedence Audit Panel */}
+      {roomId && <RoomMemoriesPanel roomId={roomId} />}
 
       {/* Room Memory Blacklist Exclusion Panel */}
       {roomId && <RoomBlacklistPanel roomId={roomId} />}

@@ -77,7 +77,43 @@ flowchart TD
 
 ---
 
-## 4. Implementation Milestones
+## 4. Network Connectivity & VPC Topology (Outbound-Only)
+
+> [!IMPORTANT]
+> **Zero Inbound Port Requirement**: ContextKit SaaS **NEVER** initiates inbound network connections into the customer's VPC. Customer firewalls require **0 inbound open ports**.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Agent as Client AI Agent (Client VPC)
+    participant Sidecar as Client Sidecar Proxy (Client VPC)
+    participant SaaS as ContextKit SaaS Platform (api.contextkit.com)
+    participant LocalLLM as Private LLM / Ollama (Client VPC)
+
+    Note over Agent,Sidecar: 1. Agent sends unencrypted message
+    Agent->>Sidecar: POST /v1/rooms/room_1/messages (Plaintext)
+    Sidecar->>Sidecar: Encrypt AES-256-GCM & Rotate Vector (R * v)
+    Note over Sidecar,SaaS: Outbound Egress TLS 1.3 (Port 443)
+    Sidecar->>SaaS: POST /v1/rooms/room_1/messages (Ciphertext + v_enc)
+    SaaS-->>Sidecar: 201 Created (Message Persisted)
+
+    Note over Sidecar,SaaS: 2. Outbound Worker Micro-Sweep Poll
+    Sidecar->>SaaS: GET /v1/rooms/room_1/memories?status=pending_eval (Outbound HTTPS)
+    SaaS-->>Sidecar: Return Encrypted Candidate Memories
+    Sidecar->>Sidecar: Decrypt memories using K_room in VPC memory
+    Sidecar->>LocalLLM: Evaluate Fact Contradiction (EAV)
+    LocalLLM-->>Sidecar: Contradiction Found (Fact A superseded by Fact B)
+    Sidecar->>SaaS: POST /v1/memories/mem_101/supersede (Signed Directive via HTTPS)
+    SaaS-->>Sidecar: 200 OK (DAG Updated)
+```
+
+### Egress Connectivity Options for SaaS Customers
+1. **Public HTTPS / Egress Gateway (Standard SaaS)**: Sidecar sends standard outbound HTTPS (Port 443) requests to `https://api.contextkit.com`.
+2. **AWS PrivateLink / GCP Private Service Connect (Enterprise Zero-Egress)**: Enterprise clients route outbound HTTPS traffic over private ENI endpoints without traversing the public internet.
+
+---
+
+## 5. Implementation Milestones
 
 1. **Milestone 1**: Python SDK Core (`crypto.py`, `vector_rotation.py`, `client.py`, `setup.py`) + Pytest suite.
 2. **Milestone 2**: Client Health Micro-Sweep Worker (`health_worker.py`) with Ollama / OpenAI local fallback.

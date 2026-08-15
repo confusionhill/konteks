@@ -26,6 +26,10 @@ type Memory struct {
 	Metadata           string    `db:"metadata" json:"metadata"`
 	IsEncrypted        bool      `db:"is_encrypted" json:"is_encrypted"`
 	EncryptionMetadata *string   `db:"encryption_metadata" json:"encryption_metadata,omitempty"`
+	Status             string    `db:"status" json:"status"`
+	SupersededByID     *string   `db:"superseded_by_id" json:"superseded_by_id,omitempty"`
+	ShannonEntropy     float64   `db:"shannon_entropy" json:"shannon_entropy"`
+	IsWhitelisted      bool      `db:"is_whitelisted" json:"is_whitelisted"`
 }
 
 type ProjectLogEntry struct {

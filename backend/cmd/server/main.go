@@ -63,6 +63,7 @@ func main() {
 		"db/migrations/03_add_evaluation_encryption_fields.sql",
 		"db/migrations/04_add_room_description_and_parent.sql",
 		"db/migrations/05_add_artifacts.sql",
+		"db/migrations/07_add_context_health_settings.sql",
 	}
 	for _, migrationFile := range migrationFiles {
 		log.Printf("applying database migrations from %s...", migrationFile)

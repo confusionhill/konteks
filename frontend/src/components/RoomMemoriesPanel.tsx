@@ -48,8 +48,15 @@ export const RoomMemoriesPanel: React.FC<RoomMemoriesPanelProps> = ({ roomId }) 
   const handleTriggerClean = async () => {
     setCleaning(true);
     try {
-      const activeProjectID = localStorage.getItem('activeProjectID') || '';
-      const token = localStorage.getItem('token') || '';
+      const token = localStorage.getItem('konteks_token');
+      const activeProjStr = localStorage.getItem('konteks_active_project');
+      let activeProjectID = '';
+      if (activeProjStr) {
+        try {
+          activeProjectID = JSON.parse(activeProjStr)?.id || '';
+        } catch {}
+      }
+
       const response = await fetch(`/v1/rooms/${roomId}/context-health/clean`, {
         method: 'POST',
         headers: {

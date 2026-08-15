@@ -23,14 +23,26 @@ export interface MemoryItem {
   created_at?: string;
 }
 
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  const activeProjectID = localStorage.getItem('activeProjectID');
-  return {
+const getAuthHeaders = (): HeadersInit => {
+  const token = localStorage.getItem('konteks_token');
+  const activeProjStr = localStorage.getItem('konteks_active_project');
+  let activeProjectID = '';
+  if (activeProjStr) {
+    try {
+      activeProjectID = JSON.parse(activeProjStr)?.id || '';
+    } catch {}
+  }
+
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(activeProjectID ? { 'X-Project-ID': activeProjectID } : {}),
   };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (activeProjectID) {
+    headers['X-Project-ID'] = activeProjectID;
+  }
+  return headers;
 };
 
 export async function fetchContextHealthPolicy(projectID: string): Promise<ContextHealthPolicy> {

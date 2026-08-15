@@ -4,7 +4,17 @@ This document tracks all caching requirements, data structures, and cache invali
 
 ---
 
-## 1. Artifact & Core Memory Caching Architecture
+## 1. Current Non-Redis Engine Architecture (As-Is State)
+
+ContextKit currently runs **without a Redis dependency** (`docker-compose.yml` provisions PostgreSQL `pgvector:pg15`, Go `konteks-app`, and MinIO `minio`).
+
+- **Async Task Execution**: Handled natively in Go via bounded channel worker queues (`chan messageTask`) and goroutine worker pools (`messageUsecase.worker()`).
+- **Memory & Room Caching**: Queries execute directly against PostgreSQL 15 with indexes, `sqlx.DB`, and local in-memory Go data structures.
+- **Deduplication & Entropy**: Executes inline in Go using Shannon entropy calculations, regex pre-parsers, and `gzip` compression ratio checks (`isSpam`).
+
+---
+
+## 2. Artifact & Core Memory Caching Architecture (Future Redis Phase)
 
 ```mermaid
 flowchart TD
@@ -32,7 +42,7 @@ flowchart TD
 
 ---
 
-## 2. Redis Key Patterns & Data Structures
+## 3. Redis Key Patterns & Data Structures (Future Phase)
 
 ### A. Room Blacklist Mask Cache
 - **Key Pattern**: `room:{room_id}:blacklist:artifacts` (Redis Set `SADD`)
@@ -58,8 +68,19 @@ flowchart TD
 
 ---
 
-## 3. General Room & State Caching (Pre-Existing Scope)
+## 4. Context Health Engine Redis Migration Plan (Future Phase)
 
-- **Active Room State Cache**: `room:{room_id}:state` (JSON string)
-- **API Key Hashing & Auth Cache**: `apikey:{key_hash}` (String string)
-- **Rate Limiting Counters**: `ratelimit:{project_id}:{endpoint}` (Redis Sliding Window)
+When ContextKit scales across multiple backend app instances behind a load balancer, the Context Health Engine will migrate its background task queue and room locks from in-memory Go channels to Redis:
+
+### A. Distributed Micro-Sweep Task Queue
+- **Key Pattern**: `context_health:queue:micro_sweeps` (Redis Stream / Asynq Task Queue)
+- **Purpose**: Distribute room micro-sweep background jobs across multiple worker nodes.
+- **Transition**: Replaces in-memory `chan messageTask` channel when multi-node deployment is enabled.
+
+### B. Distributed Room Health Sweep Lock
+- **Key Pattern**: `lock:room:{room_id}:health_sweep` (Redis Key with TTL 30s, `SET NX PX 30000`)
+- **Purpose**: Prevent duplicate concurrent LLM contradiction sweeps on the same room across multi-replica deployments.
+
+### C. Fast Payload Deduplication Set
+- **Key Pattern**: `room:{room_id}:seen_hashes` (Redis HyperLogLog / Set)
+- **Purpose**: O(1) duplicate payload detection prior to PostgreSQL vector queries.

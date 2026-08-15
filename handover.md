@@ -2,10 +2,10 @@
 
 ## 1. Overview & Architecture Summary
 
-**Konteks** is a high-performance **Context-as-a-Service (CaaS)** platform that powers AI agents with zero-latency stateful context assembly, vector memory recall, long-form core markdown memory artifacts, and cold storage room lifecycle management.
+**Konteks** is a high-performance **Context-as-a-Service (CaaS)** platform that powers AI agents with zero-latency stateful context assembly, vector memory recall, long-form core markdown memory artifacts, cold storage room lifecycle management, and an automated **Context Health Engine** for noise sanitization and stale fact lifecycle management.
 
 ### Key Architectural Model
-- **User -> Has Projects -> Project Has Rooms & Core Memory Artifacts**: Rooms, short-term memories, and markdown memory artifacts belong directly to a **Project**, not a raw user or global tenant.
+- **User -> Has Projects -> Project Has Rooms, Core Memory Artifacts & Context Health Policies**: Rooms, short-term memories, core markdown artifacts, and context health policies belong directly to a **Project**, not a raw user or global tenant.
 - **Project Members & Invitations**: Fully prepared for team collaboration via `project_members` (roles: `owner`, `admin`, `member`) and `project_invitations` tables.
 - **Dual Authentication System**:
   1. **User JWT Authentication** (`Authorization: Bearer <jwt_token>`): Used by the Web Dashboard. Claims contain `user_id`, `email`, and an array of authorized `projects: ["uuid-1", ...]`. Requests scope queries to a target project via the `X-Project-ID` header with **0ms database authorization latency**.
@@ -20,7 +20,7 @@
 - **Email**: `admin@admin.com`
 - **Password**: `admin123`
 - **Pre-seeded Demo Project**: `Demo AI Assistant Project` (`b0000000-0000-0000-0000-000000000001`)
-- **Pre-seeded Test API Key**: `ck_live_dev_test_key_123`
+- **Live Test API Key**: `ck_live_3383e91ba399b71fb614c8b239a7629b`
 
 ---
 
@@ -32,6 +32,7 @@ Consolidated schema migrations in `backend/db/migrations/`:
 - **`03_add_evaluation_encryption_fields.sql`**: Adds encryption fields to `context_evaluations`.
 - **`04_add_room_description_and_parent.sql`**: Adds `description` and `parent_room_id` to `rooms` table for multi-agent sub-room hierarchies.
 - **`05_add_artifacts.sql`**: Adds `artifact_groups`, `artifacts` (with `s3_key`), `artifact_chunks` (with HNSW vector index), `artifact_references` (Knowledge Graph Edges), and `room_artifact_blacklists`.
+- **`07_add_context_health_settings.sql`**: Adds `context_health_policy` JSONB setting to `projects`, extends `memories` table with `status`, `superseded_by_id`, `shannon_entropy`, `is_whitelisted`, and creates `memory_revisions` for audit logging.
 
 ---
 
@@ -51,7 +52,29 @@ Modern AI agents rely on durable, structured Markdown memory files (e.g. system 
 
 ---
 
-## 5. Web Dashboard & Routing Architecture
+## 5. Context Health Engine (Pollution Mitigation & Stale Knowledge Lifecycle)
+
+The **Context Health Engine** sanitizes memory noise, manages fact versioning, and resolves conflicting user state over extended 1-year+ room timelines.
+
+### Key Context Health Pillars
+1. **Fast-Path Deterministic Ingress Gate (`service/entropy.go`)**:
+   - Calculates Shannon entropy for prose text.
+   - Applies regex technical whitelisting for code blocks, API keys (`sk-...`, `ck_live_...`), UUIDs, Base64 strings, and CJK text to prevent false-positive entropy rejections.
+2. **Version-Linked Supersedence DAG (`usecase/context_health_usecase.go`)**:
+   - Runs LLM Entity-Attribute-Value (EAV) contradiction evaluation during room micro-sweeps ($N=50$ turns).
+   - Outdated facts are updated to `status = 'superseded'` and linked to the new fact via `superseded_by_id`.
+   - Immutable audit logs are stored in `memory_revisions`.
+3. **Tiered SLA Context Retrieval**:
+   - **Standard Active Query SLA**: $\le 25\text{ms}$ p95 (`WHERE status = 'active'`).
+   - **Temporal Historical Query SLA**: $\le 250\text{ms}$ p95 (Deterministic temporal parser extracts relative expressions like *"8 months ago"* and traverses cold historical partitions).
+4. **Distance-Preserving Vector Pseudonymization (DPVP)**:
+   - Mathematically honest security model for encrypted rotated vectors ($\mathbf{R} \cdot \mathbf{v}$) with bucketed metadata (`token_length` ranges: `0-128`, `129-512`, `513-2048`).
+5. **Zero Redis Infrastructure**:
+   - Runs natively on Docker Compose (`docker-compose.yml`) via PostgreSQL 15 `pgvector:pg15`, Go `chan messageTask` worker queues, and goroutines. Redis migration specs for multi-replica scaling are detailed in `backlog/cache.md`.
+
+---
+
+## 6. Web Dashboard & Routing Architecture
 
 Built with **React 19**, **React Router v7**, and **TailwindCSS** adhering to the Corporate Trust design system (Indigo `#4F46E5`, Violet `#7C3AED`, Slate `#F8FAFC`).
 
@@ -66,38 +89,36 @@ Built with **React 19**, **React Router v7**, and **TailwindCSS** adhering to th
    - **Tab 3: Short Fact Memories Inspector**: Search extracted user facts.
    - **In-Dashboard Markdown Editor**: Edit `.md` content directly in the browser with automatic S3 and `pgvector` re-indexing (`PUT /v1/projects/:id/artifacts/:artifact_id`).
 6. `/dashboard/logs`: **Logs Tab** (Main Logs & Context Intelligence Dashboard featuring evaluation metrics and dual-view log streams).
-7. `/dashboard/logs/:roomId`: **Dedicated Log Inspection Page** featuring the new **"Memory Blacklist"** exclusion panel for managing room memory blacklists.
+7. `/dashboard/rooms/:roomId`: **Dedicated Log & Room Inspection Page** featuring:
+   - **Memory Blacklist Exclusion Panel** (`RoomBlacklistPanel.tsx`).
+   - **Context Memory Audit & Supersedence Panel** (`RoomMemoriesPanel.tsx`) with status badges (`active`, `superseded`, `flagged`), entropy scores, and a **Restore Fact** button.
 8. `/dashboard/evaluations/:evalId`: **Dedicated Context Evaluation Inspection Page**.
 9. `/dashboard/api-keys`: **API Keys Tab**.
-10. `/dashboard/settings`: **Settings Tab**.
+10. `/dashboard/settings`: **Project Settings Tab** featuring the **Context Health Engine Policy Card** (Master toggle, mode selectors `balanced`/`strict`/`cost_optimized`/`off`, capability warning banners, recency decay slider, turn eval interval, max entropy threshold, and Save Policy button).
 
 ---
 
-## 6. How to Run, Build & Verify
+## 7. How to Run, Build & Verify
 
-### 1. Database Migrations (PostgreSQL Docker)
-Ensure PostgreSQL with `pgvector` is running (e.g. via Docker):
+### 1. Full Docker Compose Deployment (Recommended)
 ```bash
-# Docker PostgreSQL container
-docker run -d --name contextkit-postgres \
-  -e POSTGRES_DB=contextkit \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -p 5432:5432 \
-  pgvector/pgvector:pg16
-```
-Migrations `01_init.sql` through `05_add_artifacts.sql` apply automatically on backend server startup!
+# Build backend and start PostgreSQL pgvector + MinIO + Go server
+docker compose up -d --build
 
-### 2. Backend Server (Go)
+# Verify container logs & migration 07 status
+docker logs konteks-app --tail 30
+```
+
+### 2. Backend Server Unit & Integration Tests (Go)
 ```bash
 cd backend
-go test -v ./...       # Run all backend unit tests
-go run cmd/server/main.go
+go test -v ./...       # Run all backend unit tests (0.585s)
 ```
 
 ### 3. Frontend Web Dashboard (React + Vite)
 ```bash
 cd frontend
+npx tsc --noEmit    # Verify zero TypeScript compilation errors
 npm run build       # Build production bundle
 npm run dev         # Start local dev server at http://localhost:5173
 ```

@@ -83,6 +83,7 @@ func main() {
 	usageRepo := repository.NewUsageRepository(db)
 	evalRepo := repository.NewEvaluationRepository(db)
 	artifactRepo := repository.NewArtifactRepository(db)
+	healthRepo := repository.NewContextHealthRepository(db)
 
 	// 5. Initialize Services & Clients
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
@@ -98,10 +99,13 @@ func main() {
 	// 6. Initialize Business Logic Usecases
 	artifactUsecase := usecase.NewArtifactUsecase(artifactRepo, openRouterClient, storageProvider)
 	roomUsecase := usecase.NewRoomUsecase(roomRepo)
-	messageUsecase := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, cryptoService, cfg)
+	messageUsecaseImpl := usecase.NewMessageUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, cryptoService, cfg)
 	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, evalRepo, cryptoService, cfg, artifactUsecase)
 	eventUsecase := usecase.NewEventUsecase(roomRepo, eventRepo)
 	usageUsecase := usecase.NewUsageUsecase(usageRepo)
+	healthUsecase := usecase.NewContextHealthUsecase(healthRepo, roomRepo, openRouterClient)
+
+	messageUsecase := messageUsecaseImpl
 
 	// 7. Initialize Echo REST API Handlers
 	eventBroker := handler.NewEventBroker()
@@ -115,6 +119,7 @@ func main() {
 	contextHandler := handler.NewContextHandler(contextUsecase)
 	eventHandler := handler.NewEventHandler(eventUsecase, eventBroker)
 	dashboardHandler := handler.NewDashboardHandler(usageUsecase, roomUsecase, messageUsecase, roomRepo, storageProvider, evalRepo)
+	healthHandler := handler.NewContextHealthHandler(healthUsecase)
 
 	// 8. Initialize Echo HTTP Router
 	e := echo.New()
@@ -151,6 +156,8 @@ func main() {
 	v1.GET("/projects/:project_id/api-keys", projectHandler.ListAPIKeys)
 	v1.POST("/projects/:project_id/api-keys", projectHandler.CreateAPIKey)
 	v1.DELETE("/projects/:project_id/api-keys/:key_id", projectHandler.RevokeAPIKey)
+	v1.GET("/projects/:project_id/context-health-policy", healthHandler.GetPolicy)
+	v1.PUT("/projects/:project_id/context-health-policy", healthHandler.UpdatePolicy)
 
 	// Artifacts & Core Memory API
 	v1.POST("/projects/:project_id/artifacts", artifactHandler.CreateArtifact)
@@ -170,6 +177,11 @@ func main() {
 	v1.POST("/rooms/:room_id/blacklist", artifactHandler.AddRoomBlacklist)
 	v1.GET("/rooms/:room_id/blacklist", artifactHandler.GetRoomBlacklists)
 	v1.DELETE("/rooms/:room_id/blacklist/:blacklist_id", artifactHandler.RemoveRoomBlacklist)
+	v1.GET("/rooms/:room_id/memories", healthHandler.ListRoomMemories)
+	v1.POST("/rooms/:room_id/context-health/clean", healthHandler.CleanRoom)
+
+	// Memories Restoration API
+	v1.POST("/memories/:memory_id/restore", healthHandler.RestoreMemory)
 
 	// Messages API
 	v1.POST("/rooms/:room_id/messages", messageHandler.CreateMessage)

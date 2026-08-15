@@ -30,6 +30,7 @@ type messageUsecase struct {
 	storageProvider  domain.StorageProvider
 	cryptoService    service.CryptoService
 	cfg              *config.Config
+	healthUsecase    domain.ContextHealthUsecase
 	taskQueue        chan messageTask
 }
 
@@ -58,6 +59,10 @@ func NewMessageUsecase(
 	}
 
 	return mu
+}
+
+func (u *messageUsecase) SetHealthUsecase(h domain.ContextHealthUsecase) {
+	u.healthUsecase = h
 }
 
 func (u *messageUsecase) worker() {
@@ -198,6 +203,13 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 			} else if !isLargeMessage {
 				log.Printf("[Background Worker]: No new salient facts extracted for this turn.")
 			}
+		}
+	}
+
+	if u.healthUsecase != nil && task.Sequence > 0 && task.Sequence%50 == 0 {
+		log.Printf("[Background Worker]: Sequence %d reached for room %s. Triggering Context Health micro-sweep...", task.Sequence, task.RoomID)
+		if errSweep := u.healthUsecase.ProcessMicroSweep(ctx, task.ProjectID, task.RoomID); errSweep != nil {
+			log.Printf("[Background Worker ContextHealth Sweep Error]: %v", errSweep)
 		}
 	}
 }

@@ -298,3 +298,81 @@ Output ONLY a valid JSON object matching this schema:
 
 	return &eval, nil
 }
+
+type contradictionJSON struct {
+	IsContradiction bool    `json:"is_contradiction"`
+	Confidence      float64 `json:"confidence"`
+	Reasoning       string  `json:"reasoning"`
+}
+
+func (s *openRouterServiceClient) EvaluateContradiction(ctx context.Context, factA string, factB string) (bool, float64, error) {
+	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(s.cfg.OpenRouterBaseURL, "/"))
+
+	systemPrompt := `You are an Entity-Attribute-Value (EAV) Fact Contradiction Evaluator.
+Compare Fact A (older stored fact) and Fact B (newer user fact) to determine if Fact B explicitly SUPERSEDES or CONTRADICTS Fact A on the exact same entity attribute.
+
+Rules:
+1. Contradiction occurs when Fact B changes or overrides an attribute of Fact A (e.g. "User lives in SF" vs "User lives in Tokyo", or "DB is Postgres" vs "DB switched to MySQL").
+2. Coexistence (NOT a contradiction) occurs when Fact B adds complementary info without overriding Fact A (e.g. "User lives in SF" vs "User works remotely", or "Prefers Go" vs "Uses Python for scripts").
+3. Set confidence between 0.0 and 1.0. High confidence (>=0.90) is required for explicit supersedence.
+
+Output ONLY a valid JSON object matching this schema:
+{
+  "is_contradiction": true,
+  "confidence": 0.95,
+  "reasoning": "Fact B updates the user's primary residence from Tokyo to SF."
+}`
+
+	userPrompt := fmt.Sprintf("Fact A (Older): %s\nFact B (Newer): %s", factA, factB)
+
+	reqBody := chatCompletionRequest{
+		Model: s.cfg.OpenRouterReasoningModel,
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		},
+		ResponseFormat: &responseFormat{Type: "json_object"},
+	}
+
+	jsonBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return false, 0.0, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return false, 0.0, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.cfg.OpenRouterAPIKey)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return false, 0.0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return false, 0.0, fmt.Errorf("openrouter evaluate contradiction api returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var respBody chatCompletionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
+		return false, 0.0, err
+	}
+
+	if len(respBody.Choices) == 0 {
+		return false, 0.0, fmt.Errorf("openrouter evaluate contradiction api returned empty choices")
+	}
+
+	content := respBody.Choices[0].Message.Content
+
+	var res contradictionJSON
+	if err := json.Unmarshal([]byte(content), &res); err != nil {
+		return false, 0.0, fmt.Errorf("failed to parse JSON contradiction response: %w", err)
+	}
+
+	return res.IsContradiction, res.Confidence, nil
+}

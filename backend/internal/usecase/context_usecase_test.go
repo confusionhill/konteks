@@ -141,6 +141,10 @@ func (m *mockOpenRouter) EvaluateContext(ctx context.Context, query string, cont
 	return &domain.ContextEvaluation{}, nil
 }
 
+func (m *mockOpenRouter) EvaluateContradiction(ctx context.Context, factA string, factB string) (bool, float64, error) {
+	return false, 0.0, nil
+}
+
 func TestGetContextPackage_PendingDelta(t *testing.T) {
 	roomID := "room-1"
 	projectID := "project-1"

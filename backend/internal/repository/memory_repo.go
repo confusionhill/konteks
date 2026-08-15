@@ -91,18 +91,18 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 
 	if externalUserID != nil && *externalUserID != "" {
 		query = `
-			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
 			FROM memories
-			WHERE room_id = $1 OR external_user_id = $2
+			WHERE (room_id = $1 OR external_user_id = $2) AND status = 'active'
 			ORDER BY ($4 * (1 - (embedding <=> $3::vector)) + $5 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
 			LIMIT $6
 		`
 		args = []any{roomID, *externalUserID, embeddingStr, semanticWeight, freshnessWeight, limit}
 	} else {
 		query = `
-			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
 			FROM memories
-			WHERE room_id = $1
+			WHERE room_id = $1 AND status = 'active'
 			ORDER BY ($3 * (1 - (embedding <=> $2::vector)) + $4 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
 			LIMIT $5
 		`

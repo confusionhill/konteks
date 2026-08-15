@@ -74,7 +74,26 @@ The **Context Health Engine** sanitizes memory noise, manages fact versioning, a
 
 ---
 
-## 6. Web Dashboard & Routing Architecture
+## 6. Client Sidecar SDK & Zero-Trust Proxy (`sdk/python/` & `sidecar/`)
+
+The **Client Sidecar SDK** runs in the customer's VPC, providing zero-trust E2EE envelope encryption, vector matrix rotation, and transparent HTTP proxying.
+
+### Key Sidecar SDK Components
+1. **Python Package (`sdk/python/contextkit_sdk/`)**:
+   - `crypto.py`: HKDF key derivation ($\mathbf{K}_{room} = \text{HKDF}(\mathbf{K}_{master})$) and AES-256-GCM envelope encryption/decryption.
+   - `vector_rotation.py`: Orthonormal Matrix generator ($\mathbf{R} \in \mathbb{R}^{d \times d}$) to transform embeddings ($\mathbf{v}_{enc} = \mathbf{R} \cdot \mathbf{v}$) while preserving exact cosine distance in `pgvector`.
+   - `health_worker.py`: Client E2EE background worker that decrypts candidate memories in client memory, evaluates contradictions via local/private LLMs (Ollama, vLLM, private OpenAI endpoints), and submits signed supersedence directives.
+   - `client.py` & `setup.py`: High-level Python package (`pip install contextkit-sdk`).
+2. **Transparent Sidecar Proxy Container (`sidecar/`)**:
+   - `sidecar/proxy.py`: AsyncIO / FastAPI HTTP proxy listening at `http://localhost:8085`.
+   - `Dockerfile` & `docker-compose.sidecar.yml`: Containerized proxy allowing legacy AI agents to communicate with ContextKit using standard API calls while the sidecar handles encryption, vector rotation, and context health micro-sweeps invisibly.
+3. **Outbound-Only VPC Connectivity**:
+   - Requires **0 open inbound ports** in client VPC firewalls. All communication uses outbound HTTPS (Port 443 TLS 1.3).
+   - Project-scoped connection multiplexing ($O(1)$ connection per project) prevents connection storms across millions of rooms.
+
+---
+
+## 7. Web Dashboard & Routing Architecture
 
 Built with **React 19**, **React Router v7**, and **TailwindCSS** adhering to the Corporate Trust design system (Indigo `#4F46E5`, Violet `#7C3AED`, Slate `#F8FAFC`).
 
@@ -98,7 +117,7 @@ Built with **React 19**, **React Router v7**, and **TailwindCSS** adhering to th
 
 ---
 
-## 7. How to Run, Build & Verify
+## 8. How to Run, Build & Verify
 
 ### 1. Full Docker Compose Deployment (Recommended)
 ```bash
@@ -115,7 +134,12 @@ cd backend
 go test -v ./...       # Run all backend unit tests (0.585s)
 ```
 
-### 3. Frontend Web Dashboard (React + Vite)
+### 3. Client Python SDK Unit Tests (Python)
+```bash
+./venv/bin/python -m unittest discover -s sdk/python/tests -p "test_*.py"
+```
+
+### 4. Frontend Web Dashboard (React + Vite)
 ```bash
 cd frontend
 npx tsc --noEmit    # Verify zero TypeScript compilation errors

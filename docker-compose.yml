@@ -41,6 +41,22 @@ services:
       - AWS_S3_BUCKET=contextkit-archive
       - JWT_SECRET=contextkit_super_secret_jwt_key_2026_change_in_prod
 
+  sidecar:
+    build:
+      context: .
+      dockerfile: sidecar/Dockerfile
+    container_name: konteks-sidecar
+    ports:
+      - "8085:8085"
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      - CONTEXTKIT_TARGET_URL=http://app:8080
+      - CONTEXTKIT_MASTER_KEY=konteks_sample_static_master_key_32b!
+      - ENABLE_E2EE=true
+    restart: unless-stopped
+
   minio:
     image: minio/minio:latest
     container_name: konteks-minio

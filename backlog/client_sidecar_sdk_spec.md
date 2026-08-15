@@ -22,23 +22,23 @@ The **Client Sidecar SDK** sits entirely within the client's cloud VPC (or as an
 ```mermaid
 flowchart TD
     subgraph Client Application / Kubernetes Pod
-        Agent[Client AI Agent Process] -->|Unencrypted API Call| Proxy[ContextKit Sidecar Proxy :8085]
+        Agent["Client AI Agent Process"] -->|Unencrypted API Call| Proxy["ContextKit Sidecar Proxy (Port 8085)"]
         
         subgraph Sidecar Engine (Client VPC)
-            Proxy --> HKDF[HMAC-HKDF Key Manager]
-            Proxy --> Crypto[AES-256-GCM Engine]
-            Proxy --> Rotator[Orthonormal Matrix Rotator R]
+            Proxy --> HKDF["HMAC-HKDF Key Manager"]
+            Proxy --> Crypto["AES-256-GCM Engine"]
+            Proxy --> Rotator["Orthonormal Matrix Rotator R"]
             
             subgraph Client Health Worker
-                Worker[Background Contradiction Worker] --> LocalDec[Local Decryptor]
-                Worker --> PrivateLLM[Client Private LLM / Ollama]
+                Worker["Background Contradiction Worker"] --> LocalDec["Local Decryptor"]
+                Worker --> PrivateLLM["Client Private LLM or Ollama"]
             end
         end
     end
 
     subgraph ContextKit Platform Backend (Zero-Knowledge)
-        Crypto -->|Base64 AES-256-GCM Container| BackendAPI[ContextKit Go Server :8080]
-        Rotator -->|Transformed Embedding v_enc| DB[(PostgreSQL pgvector)]
+        Crypto -->|Base64 AES-256-GCM Container| BackendAPI["ContextKit Go Server (Port 8080)"]
+        Rotator -->|Transformed Embedding v_enc| DB[("PostgreSQL pgvector")]
         PrivateLLM -->|Signed Supersedence Directive| BackendAPI
     end
 

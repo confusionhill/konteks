@@ -129,31 +129,45 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 
 	history, err := u.messageRepo.ListByRoom(ctx, task.RoomID, 15, 0)
 	if err == nil && len(history) > 0 {
-		decryptedHistory := make([]domain.Message, len(history))
+		var decryptedHistory []domain.Message
 		var key []byte
 		if u.cryptoService != nil && u.cfg != nil {
 			key = u.cryptoService.ResolveKey("", u.cfg.EncryptionMasterKey)
 		}
-		for i, m := range history {
-			decryptedHistory[i] = m
-			if m.IsEncrypted && len(key) > 0 {
-				var nonce string
-				if m.EncryptionMetadata != nil {
-					var meta map[string]interface{}
-					if json.Unmarshal([]byte(*m.EncryptionMetadata), &meta) == nil {
-						if n, ok := meta["nonce"].(string); ok {
-							nonce = n
+		for _, m := range history {
+			msgCopy := m
+			if m.IsEncrypted || strings.HasPrefix(m.Content, "enc_") {
+				if u.cryptoService != nil && u.cfg != nil && len(key) > 0 {
+					var nonce string
+					if m.EncryptionMetadata != nil {
+						var meta map[string]interface{}
+						if json.Unmarshal([]byte(*m.EncryptionMetadata), &meta) == nil {
+							if n, ok := meta["nonce"].(string); ok {
+								nonce = n
+							}
 						}
 					}
-				}
-				if decrypted, errDec := u.cryptoService.Decrypt(m.Content, nonce, key); errDec == nil {
-					decryptedHistory[i].Content = decrypted
+					if decrypted, errDec := u.cryptoService.Decrypt(m.Content, nonce, key); errDec == nil {
+						msgCopy.Content = decrypted
+						msgCopy.IsEncrypted = false
+					}
 				}
 			}
-			
-			if len(decryptedHistory[i].Content) > 1000 {
-				decryptedHistory[i].Content = decryptedHistory[i].Content[:1000] + "...[Truncated due to length]"
+
+			// If message is encrypted and server cannot decrypt it (Client E2EE), skip passing ciphertext to LLM
+			if msgCopy.IsEncrypted || strings.HasPrefix(msgCopy.Content, "enc_") {
+				continue
 			}
+
+			if len(msgCopy.Content) > 1000 {
+				msgCopy.Content = msgCopy.Content[:1000] + "...[Truncated due to length]"
+			}
+			decryptedHistory = append(decryptedHistory, msgCopy)
+		}
+
+		if len(decryptedHistory) == 0 {
+			log.Printf("[Background Worker]: Skipping server-side state & fact extraction for Client E2EE room %s", task.RoomID)
+			return
 		}
 
 		log.Printf("[Background Worker]: extracting topic, summary, state variables, and salient facts...")

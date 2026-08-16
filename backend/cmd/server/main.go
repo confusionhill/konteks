@@ -96,6 +96,7 @@ func main() {
 		vectorStore = repository.NewPgvectorStore(db)
 		log.Println("[VectorStore]: Initialized pgvector provider.")
 	}
+	_ = vectorStore
 
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
 	cryptoService := service.NewCryptoService()

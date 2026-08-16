@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/config"
+	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/dika/contextkit/backend/internal/repository"
 	"github.com/dika/contextkit/backend/internal/service"
 	"github.com/dika/contextkit/backend/internal/worker"
@@ -41,16 +42,23 @@ func main() {
 	messageRepo := repository.NewMessageRepository(db)
 	memoryRepo := repository.NewMemoryRepository(db)
 
-	// 4. Initialize Storage Service (MinIO/S3)
+	// 4. Initialize Storage Service & Vector Store
 	storageProvider, err := service.NewS3StorageProvider(cfg)
 	if err != nil {
 		log.Fatalf("failed to initialize S3 storage provider: %v", err)
 	}
 
+	var vectorStore domain.VectorStore
+	if cfg.VectorProvider == "cloudflare" {
+		vectorStore = repository.NewCloudflareVectorizeStore(cfg)
+	} else {
+		vectorStore = repository.NewPgvectorStore(db)
+	}
+
 	// 5. Run Archival Sweep
 	inactiveDuration := time.Duration(*inactiveDays) * 24 * time.Hour
 	ctx := context.Background()
-	err = worker.RunArchivalSweep(ctx, roomRepo, messageRepo, memoryRepo, storageProvider, inactiveDuration, *roomIDFlag)
+	err = worker.RunArchivalSweep(ctx, roomRepo, messageRepo, memoryRepo, vectorStore, storageProvider, inactiveDuration, *roomIDFlag)
 	if err != nil {
 		log.Fatalf("archival sweep failed: %v", err)
 	}

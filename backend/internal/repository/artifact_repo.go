@@ -309,8 +309,8 @@ func (r *artifactRepository) CreateChunks(ctx context.Context, chunks []domain.A
 	defer tx.Rollback()
 
 	query := `
-		INSERT INTO artifact_chunks (artifact_id, project_id, chunk_index, section_heading, content, embedding)
-		VALUES ($1, $2, $3, $4, $5, $6::vector)
+		INSERT INTO artifact_chunks (id, artifact_id, project_id, chunk_index, section_heading, content, embedding)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::vector)
 	`
 	stmt, err := tx.PreparexContext(ctx, query)
 	if err != nil {
@@ -320,7 +320,7 @@ func (r *artifactRepository) CreateChunks(ctx context.Context, chunks []domain.A
 
 	for _, chunk := range chunks {
 		embStr := float32ArrayToString(chunk.Embedding)
-		_, err := stmt.ExecContext(ctx, chunk.ArtifactID, chunk.ProjectID, chunk.ChunkIndex, chunk.SectionHeading, chunk.Content, embStr)
+		_, err := stmt.ExecContext(ctx, chunk.ID, chunk.ArtifactID, chunk.ProjectID, chunk.ChunkIndex, chunk.SectionHeading, chunk.Content, embStr)
 		if err != nil {
 			return fmt.Errorf("failed inserting chunk index %d: %w", chunk.ChunkIndex, err)
 		}

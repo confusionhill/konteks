@@ -338,6 +338,7 @@ func (u *artifactUsecase) asyncGenerateEmbeddingsAndSave(projectID string, artif
 		}
 
 		dbChunks = append(dbChunks, domain.ArtifactChunk{
+			ID:             uuid.NewString(),
 			ArtifactID:     artifactID,
 			ProjectID:      projectID,
 			ChunkIndex:     i,

@@ -121,6 +121,10 @@ func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, ex
 		EmbeddingText  string  `db:"embedding"`
 		Metadata       string  `db:"metadata"`
 		CreatedAt      string  `db:"created_at"`
+		Status         string  `db:"status"`
+		SupersededByID *string `db:"superseded_by_id"`
+		ShannonEntropy float64 `db:"shannon_entropy"`
+		IsWhitelisted  bool    `db:"is_whitelisted"`
 	}
 
 	var rows []dbMemory

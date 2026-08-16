@@ -11,11 +11,12 @@ import (
 )
 
 type memoryRepository struct {
-	db *sqlx.DB
+	db          *sqlx.DB
+	vectorStore domain.VectorStore
 }
 
-func NewMemoryRepository(db *sqlx.DB) domain.MemoryRepository {
-	return &memoryRepository{db: db}
+func NewMemoryRepository(db *sqlx.DB, vectorStore domain.VectorStore) domain.MemoryRepository {
+	return &memoryRepository{db: db, vectorStore: vectorStore}
 }
 
 // Helper to convert float32 array to PostgreSQL pgvector string format: [0.1,0.2,...]
@@ -82,6 +83,13 @@ func (r *memoryRepository) Create(ctx context.Context, memory *domain.Memory) er
 	}
 
 	memory.ID = ins.ID
+
+	if r.vectorStore != nil {
+		if errVec := r.vectorStore.UpsertMemoryVector(ctx, memory); errVec != nil {
+			// Log error but do not fail DB record creation
+			fmt.Printf("[MemoryRepository Error]: failed to upsert vector: %v\n", errVec)
+		}
+	}
 	return nil
 }
 

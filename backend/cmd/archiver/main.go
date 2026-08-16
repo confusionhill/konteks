@@ -37,23 +37,23 @@ func main() {
 	}
 	defer db.Close()
 
-	// 3. Initialize Core Repositories
-	roomRepo := repository.NewRoomRepository(db)
-	messageRepo := repository.NewMessageRepository(db)
-	memoryRepo := repository.NewMemoryRepository(db)
-
-	// 4. Initialize Storage Service & Vector Store
-	storageProvider, err := service.NewS3StorageProvider(cfg)
-	if err != nil {
-		log.Fatalf("failed to initialize S3 storage provider: %v", err)
-	}
-
+	// 3. Initialize Vector Store & Storage Service
 	var vectorStore domain.VectorStore
 	if cfg.VectorProvider == "cloudflare" {
 		vectorStore = repository.NewCloudflareVectorizeStore(cfg)
 	} else {
 		vectorStore = repository.NewPgvectorStore(db)
 	}
+
+	storageProvider, err := service.NewS3StorageProvider(cfg)
+	if err != nil {
+		log.Fatalf("failed to initialize S3 storage provider: %v", err)
+	}
+
+	// 4. Initialize Core Repositories
+	roomRepo := repository.NewRoomRepository(db)
+	messageRepo := repository.NewMessageRepository(db)
+	memoryRepo := repository.NewMemoryRepository(db, vectorStore)
 
 	// 5. Run Archival Sweep
 	inactiveDuration := time.Duration(*inactiveDays) * 24 * time.Hour

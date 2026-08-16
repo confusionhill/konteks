@@ -76,18 +76,7 @@ func main() {
 		}
 	}
 
-	// 4. Initialize Core Repositories
-	authRepo := repository.NewAuthRepository(db)
-	roomRepo := repository.NewRoomRepository(db)
-	messageRepo := repository.NewMessageRepository(db)
-	memoryRepo := repository.NewMemoryRepository(db)
-	eventRepo := repository.NewEventRepository(db)
-	usageRepo := repository.NewUsageRepository(db)
-	evalRepo := repository.NewEvaluationRepository(db)
-	artifactRepo := repository.NewArtifactRepository(db)
-	healthRepo := repository.NewContextHealthRepository(db)
-
-	// 5. Initialize Services, Clients & Vector Store
+	// 4. Initialize Services, Clients & Vector Store
 	var vectorStore domain.VectorStore
 	if cfg.VectorProvider == "cloudflare" {
 		vectorStore = repository.NewCloudflareVectorizeStore(cfg)
@@ -96,7 +85,17 @@ func main() {
 		vectorStore = repository.NewPgvectorStore(db)
 		log.Println("[VectorStore]: Initialized pgvector provider.")
 	}
-	_ = vectorStore
+
+	// 5. Initialize Core Repositories
+	authRepo := repository.NewAuthRepository(db)
+	roomRepo := repository.NewRoomRepository(db)
+	messageRepo := repository.NewMessageRepository(db)
+	memoryRepo := repository.NewMemoryRepository(db, vectorStore)
+	eventRepo := repository.NewEventRepository(db)
+	usageRepo := repository.NewUsageRepository(db)
+	evalRepo := repository.NewEvaluationRepository(db)
+	artifactRepo := repository.NewArtifactRepository(db)
+	healthRepo := repository.NewContextHealthRepository(db)
 
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
 	cryptoService := service.NewCryptoService()

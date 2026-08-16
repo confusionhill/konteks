@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS artifact_chunks (
     chunk_index INT NOT NULL,
     section_heading VARCHAR(255) DEFAULT '' NOT NULL,
     content TEXT NOT NULL,
-    embedding vector(4096) NOT NULL,
+    embedding vector(1536) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_artifact_chunks_artifact ON artifact_chunks(artifact_id);

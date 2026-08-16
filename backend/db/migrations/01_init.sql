@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS memories (
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     external_user_id VARCHAR(255),
     content TEXT NOT NULL,
-    embedding vector(4096) NOT NULL,
+    embedding vector(1536) NOT NULL,
     metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

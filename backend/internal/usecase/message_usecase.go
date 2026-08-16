@@ -118,6 +118,11 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		}
 	}
 
+	if room.DefaultPolicy != nil && room.DefaultPolicy.AutoExtractState != nil && !*room.DefaultPolicy.AutoExtractState {
+		log.Printf("[Background Worker]: AutoExtractState is disabled for room %s. Skipping LLM state extraction.", task.RoomID)
+		return
+	}
+
 	state, err := u.roomRepo.GetState(ctx, task.RoomID)
 	if err != nil {
 		log.Printf("[Background Worker State Fetch Error]: failed to fetch state: %v", err)
@@ -127,7 +132,14 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		state = &domain.RoomState{RoomID: task.RoomID}
 	}
 
-	history, err := u.messageRepo.ListByRoom(ctx, task.RoomID, 15, 0)
+	// Batching: only extract state every 3 messages unless it's the very first extraction
+	if state.LastSummarizedSeq > 0 && (task.Sequence-state.LastSummarizedSeq) < 3 {
+		log.Printf("[Background Worker]: Skipping state extraction for room %s (Sequence %d, LastSummarized %d, Batch threshold < 3)", task.RoomID, task.Sequence, state.LastSummarizedSeq)
+		return
+	}
+
+	// Reduced history window (5 messages instead of 15) to save tokens
+	history, err := u.messageRepo.ListByRoom(ctx, task.RoomID, 5, 0)
 	if err == nil && len(history) > 0 {
 		var decryptedHistory []domain.Message
 		var key []byte
@@ -171,7 +183,7 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		}
 
 		log.Printf("[Background Worker]: extracting topic, summary, state variables, and salient facts...")
-		newSummary, activeTopic, stateJSON, salientFacts, errExt := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(room.StateSchema))
+		newSummary, activeTopic, stateJSON, salientFacts, errExt := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(state.State), string(room.StateSchema))
 		if errExt != nil {
 			log.Printf("[Background Worker State Extraction Error]: failed to extract state: %v", errExt)
 		} else {

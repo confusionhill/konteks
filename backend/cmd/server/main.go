@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/config"
+	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/dika/contextkit/backend/internal/handler"
 	"github.com/dika/contextkit/backend/internal/repository"
 	"github.com/dika/contextkit/backend/internal/service"
@@ -64,6 +65,7 @@ func main() {
 		"db/migrations/04_add_room_description_and_parent.sql",
 		"db/migrations/05_add_artifacts.sql",
 		"db/migrations/07_add_context_health_settings.sql",
+		"db/migrations/08_optional_embedding.sql",
 	}
 	for _, migrationFile := range migrationFiles {
 		log.Printf("applying database migrations from %s...", migrationFile)
@@ -85,7 +87,16 @@ func main() {
 	artifactRepo := repository.NewArtifactRepository(db)
 	healthRepo := repository.NewContextHealthRepository(db)
 
-	// 5. Initialize Services & Clients
+	// 5. Initialize Services, Clients & Vector Store
+	var vectorStore domain.VectorStore
+	if cfg.VectorProvider == "cloudflare" {
+		vectorStore = repository.NewCloudflareVectorizeStore(cfg)
+		log.Println("[VectorStore]: Initialized Cloudflare Vectorize provider.")
+	} else {
+		vectorStore = repository.NewPgvectorStore(db)
+		log.Println("[VectorStore]: Initialized pgvector provider.")
+	}
+
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
 	cryptoService := service.NewCryptoService()
 	storageProvider, err := service.NewS3StorageProvider(cfg)

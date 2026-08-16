@@ -133,7 +133,7 @@ type mockOpenRouter struct{}
 func (m *mockOpenRouter) GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
 	return []float32{0.1, 0.2}, nil
 }
-func (m *mockOpenRouter) ExtractStateAndSummary(ctx context.Context, history []domain.Message, currentSummary string, schemaJSON string) (string, string, string, []string, error) {
+func (m *mockOpenRouter) ExtractStateAndSummary(ctx context.Context, history []domain.Message, currentSummary string, currentStateJSON string, schemaJSON string) (string, string, string, []string, error) {
 	return "summary", "topic", "{}", []string{}, nil
 }
 

@@ -428,7 +428,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		if len(req.DynamicSchema) > 0 && string(req.DynamicSchema) != "null" && string(req.DynamicSchema) != "{}" {
 			g.Go(func() error {
 				log.Printf("[Context Engine]: dynamic schema provided. Performing on-the-fly state extraction...")
-				sum, topic, extState, _, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(req.DynamicSchema))
+				sum, topic, extState, _, errExtract := u.openRouterClient.ExtractStateAndSummary(ctx, decryptedHistory, state.Summary, string(state.State), string(req.DynamicSchema))
 				if errExtract != nil {
 					log.Printf("[Context Engine State Extraction Error]: %v", errExtract)
 				} else {

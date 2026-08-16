@@ -23,6 +23,7 @@ type ContextPolicy struct {
 	EnableGraphTraversal bool     `json:"enable_graph_traversal,omitempty"`
 	MaxArtifactTokens    int      `json:"max_artifact_tokens,omitempty"`
 	BlacklistOverride    []string `json:"blacklist_override,omitempty"`
+	AutoExtractState     *bool    `json:"auto_extract_state,omitempty"`
 }
 
 type GetContextRequest struct {
@@ -53,7 +54,7 @@ type ContextPackage struct {
 
 type OpenRouterServiceClient interface {
 	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
-	ExtractStateAndSummary(ctx context.Context, history []Message, currentSummary string, schemaJSON string) (newSummary string, activeTopic string, updatedState string, salientFacts []string, err error)
+	ExtractStateAndSummary(ctx context.Context, history []Message, currentSummary string, currentStateJSON string, schemaJSON string) (newSummary string, activeTopic string, updatedState string, salientFacts []string, err error)
 	EvaluateContext(ctx context.Context, query string, contextPkg *ContextPackage) (*ContextEvaluation, error)
 	EvaluateContradiction(ctx context.Context, factA string, factB string) (isContradiction bool, confidence float64, err error)
 }

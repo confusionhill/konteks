@@ -109,10 +109,10 @@ type extractionJSON struct {
 	NewSalientFacts []string        `json:"new_salient_facts"`
 }
 
-func (s *openRouterServiceClient) ExtractStateAndSummary(ctx context.Context, history []domain.Message, currentSummary string, schemaJSON string) (string, string, string, []string, error) {
+func (s *openRouterServiceClient) ExtractStateAndSummary(ctx context.Context, history []domain.Message, currentSummary string, currentStateJSON string, schemaJSON string) (string, string, string, []string, error) {
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(s.cfg.OpenRouterBaseURL, "/"))
 
-	systemPrompt := `You are a conversation state and summary extraction engine. Analyze the conversation history and the current summary to produce an updated state package.
+	systemPrompt := `You are a conversation state and summary extraction engine. Analyze the conversation history, current summary, and current state to produce an updated state package.
 The output must be a valid JSON object matching exactly this schema:
 {
   "summary": "a concise description of the conversation progress",
@@ -124,7 +124,7 @@ The output must be a valid JSON object matching exactly this schema:
 Guidelines:
 1. 'summary': Keep it concise but ensure it captures context (e.g., "User is comparing budget hotels in Bali").
 2. 'active_topic': Briefly name the active user intent.
-3. 'state': A flat JSON object containing key-value pairs representing parameters discussed so far (e.g., budget, location, date, amenities). Retain existing state parameters unless they are explicitly updated, refuted, or changed in the new turn.
+3. 'state': A flat JSON object containing key-value pairs representing parameters discussed so far. Retain existing state parameters unless explicitly updated or refuted. CRITICAL: DROP or REMOVE state parameters that have been fulfilled, abandoned, completed, or are no longer relevant to the active topic to conserve context space.
 4. 'new_salient_facts': Extract any NEW, distinct facts, preferences, or entities stated by the user IN THIS MOST RECENT TURN that should be remembered long-term. Output them as concise, declarative sentences (e.g. 'User is allergic to peanuts'). Do not repeat facts already in the summary. When in doubt, extract the fact. Err on the side of over-extraction, paying special attention to constraints, dates, names, locations, and user preferences. If there is absolutely nothing worth remembering (e.g., greetings, filler), output an empty array.`
 
 	if schemaJSON != "" && schemaJSON != "{}" && schemaJSON != "null" {
@@ -133,7 +133,11 @@ Guidelines:
 
 	// Formulate history string
 	var histBuilder strings.Builder
-	histBuilder.WriteString("Current Summary: " + currentSummary + "\n\nConversation History:\n")
+	histBuilder.WriteString("Current Summary: " + currentSummary + "\n")
+	if currentStateJSON != "" && currentStateJSON != "{}" && currentStateJSON != "null" {
+		histBuilder.WriteString("Current State: " + currentStateJSON + "\n")
+	}
+	histBuilder.WriteString("\nRecent Conversation History:\n")
 	for _, m := range history {
 		histBuilder.WriteString(fmt.Sprintf("%s: %s\n", m.Role, m.Content))
 	}

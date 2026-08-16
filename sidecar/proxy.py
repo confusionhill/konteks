@@ -90,13 +90,23 @@ async def proxy_handler(request: Request, path: str):
             room_id = path.split("rooms/")[1].split("/")[0]
             context_pkg = json.loads(resp_content.decode('utf-8'))
             
+            room_key = ContextCrypto.derive_room_key(MASTER_KEY, room_id)
+            decrypted = False
+
+            if context_pkg.get("relevant_messages"):
+                for m in context_pkg["relevant_messages"]:
+                    if m.get("is_encrypted") or m.get("content", "").startswith("enc_"):
+                        m["content"] = ContextCrypto.decrypt_payload(room_key, m["content"])
+                        decrypted = True
+
             if context_pkg.get("memories"):
-                logger.info(f"[Sidecar Ingress]: Decrypting context package memories for room {room_id}")
-                room_key = ContextCrypto.derive_room_key(MASTER_KEY, room_id)
                 for mem in context_pkg["memories"]:
                     if mem.get("is_encrypted") or mem.get("content", "").startswith("enc_"):
                         mem["content"] = ContextCrypto.decrypt_payload(room_key, mem["content"])
-                
+                        decrypted = True
+
+            if decrypted:
+                logger.info(f"[Sidecar Ingress]: Decrypted context package payloads for room {room_id}")
                 resp_content = json.dumps(context_pkg).encode('utf-8')
         except Exception as e:
             logger.warning(f"[Sidecar Ingress Warning]: Could not decrypt context package: {e}")

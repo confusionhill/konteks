@@ -21,7 +21,7 @@ func NewRoomRepository(db *sqlx.DB) domain.RoomRepository {
 	return &roomRepository{db: db}
 }
 
-func (r *roomRepository) Create(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+func (r *roomRepository) Create(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy, initialState json.RawMessage) (*domain.Room, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -93,12 +93,16 @@ func (r *roomRepository) Create(ctx context.Context, projectID string, externalU
 		room.DefaultPolicy = &p
 	}
 
-	// Insert initial empty state
+	// Insert initial state
+	initialStateStr := "{}"
+	if len(initialState) > 0 && string(initialState) != "null" && string(initialState) != "{}" {
+		initialStateStr = string(initialState)
+	}
 	queryState := `
 		INSERT INTO room_state (room_id, summary, active_topic, state)
-		VALUES ($1, '', '', '{}'::jsonb)
+		VALUES ($1, '', '', $2::jsonb)
 	`
-	_, err = tx.ExecContext(ctx, queryState, room.ID)
+	_, err = tx.ExecContext(ctx, queryState, room.ID, initialStateStr)
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +276,47 @@ func (r *roomRepository) UpsertState(ctx context.Context, state *domain.RoomStat
 	}
 
 	return tx.Commit()
+}
+
+func (r *roomRepository) PatchState(ctx context.Context, roomID string, updates map[string]any, deletes []string) (*domain.RoomState, error) {
+	state, err := r.GetState(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+	if state == nil {
+		state = &domain.RoomState{
+			RoomID:      roomID,
+			Summary:     "",
+			ActiveTopic: "",
+			State:       json.RawMessage("{}"),
+		}
+	}
+
+	var stateMap map[string]any
+	if len(state.State) > 0 && string(state.State) != "null" {
+		_ = json.Unmarshal(state.State, &stateMap)
+	}
+	if stateMap == nil {
+		stateMap = make(map[string]any)
+	}
+
+	for _, delKey := range deletes {
+		delete(stateMap, delKey)
+	}
+	for k, v := range updates {
+		stateMap[k] = v
+	}
+
+	newBytes, err := json.Marshal(stateMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal patched state: %w", err)
+	}
+	state.State = json.RawMessage(newBytes)
+
+	if err := r.UpsertState(ctx, state); err != nil {
+		return nil, err
+	}
+	return state, nil
 }
 
 func (r *roomRepository) ListWithOverview(ctx context.Context, projectID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]domain.RoomOverview, int, error) {

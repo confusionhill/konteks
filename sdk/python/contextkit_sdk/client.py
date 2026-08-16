@@ -29,7 +29,13 @@ class ContextKitClient:
             "X-Project-ID": self.project_id,
         }
 
-    def create_room(self, description: str = "", external_user_id: Optional[str] = None) -> Dict[str, Any]:
+    def create_room(
+        self,
+        description: str = "",
+        external_user_id: Optional[str] = None,
+        initial_state: Optional[Dict[str, Any]] = None,
+        auto_extract_state: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """
         Creates a new conversation room.
         """
@@ -38,7 +44,30 @@ class ContextKitClient:
             "description": description,
             "external_user_id": external_user_id
         }
+        if initial_state is not None:
+            payload["initial_state"] = initial_state
+        if auto_extract_state is not None:
+            payload["default_policy"] = {"auto_extract_state": auto_extract_state}
         resp = requests.post(url, json=payload, headers=self._headers())
+        resp.raise_for_status()
+        return resp.json()
+
+    def patch_state(
+        self,
+        room_id: str,
+        updates: Optional[Dict[str, Any]] = None,
+        deletes: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Explicitly updates key-value pairs or deletes keys from a room's state.
+        """
+        url = f"{self.base_url}/v1/rooms/{room_id}/state"
+        payload = {}
+        if updates is not None:
+            payload["updates"] = updates
+        if deletes is not None:
+            payload["deletes"] = deletes
+        resp = requests.patch(url, json=payload, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 

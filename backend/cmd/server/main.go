@@ -181,6 +181,7 @@ func main() {
 	// Rooms API & Blacklists
 	v1.POST("/rooms", roomHandler.CreateRoom)
 	v1.GET("/rooms/:room_id", roomHandler.GetRoomState)
+	v1.PATCH("/rooms/:room_id/state", roomHandler.PatchRoomState)
 	v1.GET("/rooms/:room_id/children", roomHandler.GetChildRooms)
 	v1.PATCH("/rooms/:room_id", roomHandler.UpdateRoom)
 	v1.DELETE("/rooms/:room_id", roomHandler.DeleteRoom)

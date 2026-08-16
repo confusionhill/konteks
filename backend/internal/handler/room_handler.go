@@ -22,6 +22,7 @@ type createRoomRequest struct {
 	ParentRoomID   *string               `json:"parent_room_id,omitempty"`
 	StateSchema    json.RawMessage       `json:"state_schema,omitempty"`
 	DefaultPolicy  *domain.ContextPolicy `json:"default_policy,omitempty"`
+	InitialState   json.RawMessage       `json:"initial_state,omitempty"`
 }
 
 func (h *RoomHandler) CreateRoom(c echo.Context) error {
@@ -35,7 +36,7 @@ func (h *RoomHandler) CreateRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
-	room, err := h.roomUsecase.CreateRoom(c.Request().Context(), projectID, req.ExternalUserID, req.Description, req.ParentRoomID, req.StateSchema, req.DefaultPolicy)
+	room, err := h.roomUsecase.CreateRoom(c.Request().Context(), projectID, req.ExternalUserID, req.Description, req.ParentRoomID, req.StateSchema, req.DefaultPolicy, req.InitialState)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -57,6 +58,35 @@ func (h *RoomHandler) GetRoomState(c echo.Context) error {
 	state, err := h.roomUsecase.GetRoomState(c.Request().Context(), projectID, roomID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, state)
+}
+
+type patchRoomStateRequest struct {
+	Updates map[string]any `json:"updates,omitempty"`
+	Deletes []string       `json:"deletes,omitempty"`
+}
+
+func (h *RoomHandler) PatchRoomState(c echo.Context) error {
+	projectID, ok := c.Get("project_id").(string)
+	if !ok || projectID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "project context required"})
+	}
+
+	roomID := c.Param("room_id")
+	if roomID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_id parameter"})
+	}
+
+	var req patchRoomStateRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	state, err := h.roomUsecase.PatchRoomState(c.Request().Context(), projectID, roomID, req.Updates, req.Deletes)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, state)

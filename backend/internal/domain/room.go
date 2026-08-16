@@ -47,12 +47,13 @@ type ChildAgentOverview struct {
 }
 
 type RoomRepository interface {
-	Create(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy) (*Room, error)
+	Create(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy, initialState json.RawMessage) (*Room, error)
 	GetByID(ctx context.Context, projectID string, roomID string) (*Room, error)
 	Update(ctx context.Context, projectID string, roomID string, description *string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy) (*Room, error)
 	Delete(ctx context.Context, projectID string, roomID string) error
 	GetState(ctx context.Context, roomID string) (*RoomState, error)
 	UpsertState(ctx context.Context, state *RoomState) error
+	PatchState(ctx context.Context, roomID string, updates map[string]any, deletes []string) (*RoomState, error)
 	ListWithOverview(ctx context.Context, projectID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]RoomOverview, int, error)
 	ListChildRooms(ctx context.Context, projectID string, parentRoomID string) ([]ChildAgentOverview, error)
 	ListRoomsForArchival(ctx context.Context, inactiveDuration time.Duration, roomID string) ([]Room, error)
@@ -77,8 +78,9 @@ type RoomOverview struct {
 }
 
 type RoomUsecase interface {
-	CreateRoom(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy) (*Room, error)
+	CreateRoom(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy, initialState json.RawMessage) (*Room, error)
 	GetRoomState(ctx context.Context, projectID string, roomID string) (*RoomState, error)
+	PatchRoomState(ctx context.Context, projectID string, roomID string, updates map[string]any, deletes []string) (*RoomState, error)
 	UpdateRoom(ctx context.Context, projectID string, roomID string, description *string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *ContextPolicy) (*Room, error)
 	DeleteRoom(ctx context.Context, projectID string, roomID string) error
 	ListRoomsOverview(ctx context.Context, projectID string, search string, status string, sortBy string, sortOrder string, minMessages int, limit int, offset int) ([]RoomOverview, int, error)

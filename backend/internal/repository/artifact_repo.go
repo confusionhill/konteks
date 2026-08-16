@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
@@ -13,11 +14,12 @@ import (
 )
 
 type artifactRepository struct {
-	db *sqlx.DB
+	db          *sqlx.DB
+	vectorStore domain.VectorStore
 }
 
-func NewArtifactRepository(db *sqlx.DB) domain.ArtifactRepository {
-	return &artifactRepository{db: db}
+func NewArtifactRepository(db *sqlx.DB, vectorStore domain.VectorStore) domain.ArtifactRepository {
+	return &artifactRepository{db: db, vectorStore: vectorStore}
 }
 
 func (r *artifactRepository) CreateGroup(ctx context.Context, group *domain.ArtifactGroup) error {
@@ -324,7 +326,17 @@ func (r *artifactRepository) CreateChunks(ctx context.Context, chunks []domain.A
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	if r.vectorStore != nil {
+		if errVec := r.vectorStore.UpsertArtifactChunkVectors(ctx, chunks, ""); errVec != nil {
+			log.Printf("[ArtifactRepo Warning]: failed to upsert artifact chunks to vector store: %v", errVec)
+		}
+	}
+
+	return nil
 }
 
 func (r *artifactRepository) DeleteChunksByArtifact(ctx context.Context, artifactID string) error {

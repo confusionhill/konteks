@@ -94,7 +94,7 @@ func main() {
 	eventRepo := repository.NewEventRepository(db)
 	usageRepo := repository.NewUsageRepository(db)
 	evalRepo := repository.NewEvaluationRepository(db)
-	artifactRepo := repository.NewArtifactRepository(db)
+	artifactRepo := repository.NewArtifactRepository(db, vectorStore)
 	healthRepo := repository.NewContextHealthRepository(db)
 
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)

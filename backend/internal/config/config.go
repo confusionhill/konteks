@@ -21,6 +21,11 @@ type Config struct {
 	EvaluationSampleRate     float64 `json:"evaluation_sample_rate"`
 	JWTSecret                string  `json:"jwt_secret"`
 	EncryptionMasterKey      string  `json:"encryption_master_key"`
+	VectorProvider           string  `json:"vector_provider"`
+	CloudflareAccountID      string  `json:"cloudflare_account_id"`
+	CloudflareAPIToken       string  `json:"cloudflare_api_token"`
+	CloudflareMemoryIndex    string  `json:"cloudflare_memory_index"`
+	CloudflareArtifactIndex  string  `json:"cloudflare_artifact_index"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -108,6 +113,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if cfg.EncryptionMasterKey == "" {
 		cfg.EncryptionMasterKey = "0123456789abcdef0123456789abcdef"
+	}
+	if cfg.VectorProvider == "" {
+		cfg.VectorProvider = "pgvector"
 	}
 
 	return &cfg, nil

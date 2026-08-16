@@ -48,7 +48,7 @@ type cfQueryRequest struct {
 	Vector         []float32      `json:"vector"`
 	TopK           int            `json:"topK"`
 	Filter         map[string]any `json:"filter,omitempty"`
-	ReturnMetadata bool           `json:"returnMetadata"`
+	ReturnMetadata string         `json:"returnMetadata,omitempty"`
 }
 
 type cfQueryResult struct {
@@ -153,10 +153,9 @@ func (s *cloudflareVectorizeStore) SearchMemoryVectors(ctx context.Context, proj
 	}
 
 	reqBody := cfQueryRequest{
-		Vector:         queryEmbedding,
-		TopK:           limit,
-		Filter:         filter,
-		ReturnMetadata: false,
+		Vector: queryEmbedding,
+		TopK:   limit,
+		Filter: filter,
 	}
 
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/vectorize/v2/indexes/%s/query", s.accountID, s.memoryIndex)
@@ -256,7 +255,7 @@ func (s *cloudflareVectorizeStore) SearchArtifactChunkVectors(ctx context.Contex
 		Vector:         queryEmbedding,
 		TopK:           limit,
 		Filter:         filter,
-		ReturnMetadata: true,
+		ReturnMetadata: "indexed",
 	}
 
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/vectorize/v2/indexes/%s/query", s.accountID, s.artifactIndex)

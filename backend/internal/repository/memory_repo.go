@@ -34,6 +34,9 @@ func float32ArrayToString(arr []float32) string {
 
 // Helper to parse PostgreSQL pgvector string back to float32 array
 func stringToFloat32Array(s string) ([]float32, error) {
+	if s == "" || s == "<nil>" || s == "NULL" {
+		return nil, nil
+	}
 	if len(s) < 2 || s[0] != '[' || s[len(s)-1] != ']' {
 		return nil, fmt.Errorf("invalid vector format: %s", s)
 	}

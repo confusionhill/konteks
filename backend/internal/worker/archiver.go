@@ -36,6 +36,7 @@ func RunArchivalSweep(
 	roomRepo domain.RoomRepository,
 	messageRepo domain.MessageRepository,
 	memoryRepo domain.MemoryRepository,
+	vectorStore domain.VectorStore,
 	storageProvider domain.StorageProvider,
 	inactiveDuration time.Duration,
 	roomID string,
@@ -128,6 +129,16 @@ func RunArchivalSweep(
 			log.Printf("[Archiver Error]: database transaction failed to archive room %s: %v. Rolling back status...", room.ID, err)
 			_ = roomRepo.UpdateStatus(ctx, room.ID, domain.RoomStatusActive)
 			continue
+		}
+
+		if vectorStore != nil && len(memories) > 0 {
+			memIDs := make([]string, len(memories))
+			for i, m := range memories {
+				memIDs[i] = m.ID
+			}
+			if errVec := vectorStore.DeleteMemoryVectors(ctx, memIDs); errVec != nil {
+				log.Printf("[Archiver Warning]: failed to purge vectors from vector store for room %s: %v", room.ID, errVec)
+			}
 		}
 
 		log.Printf("[Archiver]: Room %s successfully archived to %s and purged from Postgres.", room.ID, path)

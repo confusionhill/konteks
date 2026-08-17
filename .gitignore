@@ -28,6 +28,7 @@ example/
 !example/agent.py
 !example/memories/
 !example/upload_memories.py
+!example/mcp_agent.py
 .venv/
 venv/
 __pycache__/

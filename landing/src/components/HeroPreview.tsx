@@ -15,13 +15,13 @@ const THREAD: Turn[] = [
   { role: 'user', text: 'The one with a pool, yes.' },
   { role: 'assistant', front: 1, text: 'That\'s the Grand Hyatt. Book for Friday?' },
   { role: 'user', text: 'Book it.' },
-  { role: 'assistant', front: 2, text: 'Booked — check-in Friday, Grand Hyatt, Bali.' },
+  { role: 'assistant', front: 2, text: 'Booked. Check-in Friday, Grand Hyatt, Bali.' },
   { role: 'user', text: 'Wait, what time is check-in?' },
   { role: 'assistant', front: 3, text: '3 PM. Still in our shared context.' },
   { role: 'user', text: 'And what was my budget again?' },
   { role: 'assistant', front: 4, text: 'Under $150 a night.' },
   { role: 'user', text: 'Did I still want the pool?' },
-  { role: 'assistant', front: 5, text: 'Pool, yes — we kept that too.' },
+  { role: 'assistant', front: 5, text: 'Pool, yes. We kept that too.' },
 ];
 
 const MEMORY = ['Bali', 'under $150', 'pool', 'Grand Hyatt', 'Friday'];

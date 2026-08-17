@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -84,6 +85,7 @@ func main() {
 	contextService := service.NewMCPContextService(roomRepo, stateRepo, messageRepo, memoryRepo, openRouterClient)
 	memoryService := service.NewMCPMemoryService(roomRepo, memoryRepo, openRouterClient, embeddingWorker)
 
+	logger := newServerLogger()
 	mcpServer := mcp.NewServer(mcp.Deps{
 		AuthProvider:     authProvider,
 		DefaultAuth:      auth,
@@ -91,12 +93,13 @@ func main() {
 		ContextService:   contextService,
 		MemoryService:    memoryService,
 		EmbeddingWorker:  embeddingWorker,
+		Logger:           logger,
 	})
 
 	log.Printf("[MCP Server]: ContextKit MCP server ready (transport=%s)", *transport)
 
 	if *transport == "http" {
-		runHTTPServer(mcpServer, authProvider, *portFlag)
+		runHTTPServer(mcpServer, authProvider, logger, *portFlag)
 		return
 	}
 
@@ -106,7 +109,22 @@ func main() {
 	embeddingWorker.Close()
 }
 
-func runHTTPServer(mcpServer *server.MCPServer, authProvider *mcp.AuthProvider, port int) {
+// newServerLogger builds the structured logger used for request/observability
+// logging. Records are JSON lines on stdout so docker logs can be searched and
+// shipped to a log aggregator. The log level can be raised with MCP_LOG_LEVEL
+// (DEBUG, INFO, WARN, ERROR).
+func newServerLogger() *slog.Logger {
+	level := slog.LevelInfo
+	if lvl := os.Getenv("MCP_LOG_LEVEL"); lvl != "" {
+		var parsed slog.Level
+		if err := parsed.UnmarshalText([]byte(lvl)); err == nil {
+			level = parsed
+		}
+	}
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+}
+
+func runHTTPServer(mcpServer *server.MCPServer, authProvider *mcp.AuthProvider, logger *slog.Logger, port int) {
 	if port == 0 {
 		if envPort := os.Getenv("MCP_PORT"); envPort != "" {
 			fmt.Sscanf(envPort, "%d", &port)
@@ -118,6 +136,7 @@ func runHTTPServer(mcpServer *server.MCPServer, authProvider *mcp.AuthProvider, 
 
 	httpServer := server.NewStreamableHTTPServer(mcpServer,
 		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+			ctx = mcp.WithRequestLogger(ctx, logger)
 			rawKey := r.Header.Get("X-API-Key")
 			if rawKey == "" {
 				authHeader := r.Header.Get("Authorization")

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/dika/contextkit/backend/internal/service"
@@ -22,17 +23,28 @@ type Deps struct {
 	MemoryService  *service.MCPMemoryService
 
 	EmbeddingWorker *worker.MCPEmbeddingWorker
+
+	// Logger is optional. When set it is installed on the server so every
+	// JSON-RPC request and tool/resource invocation emits a structured log
+	// record, and is attached to request contexts for handlers to use.
+	Logger *slog.Logger
 }
 
 // NewServer builds the MCP MCPServer exposing ContextKit tools and resources.
 func NewServer(d Deps) *server.MCPServer {
-	s := server.NewMCPServer(
-		"contextkit",
-		"1.0.0",
+	opts := []server.ServerOption{
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, true),
 		server.WithLogging(),
-	)
+	}
+	if d.Logger != nil {
+		opts = append(opts,
+			server.WithLogger(d.Logger),
+			server.WithToolHandlerMiddleware(logToolMiddleware(d.Logger, d.DefaultAuth)),
+		)
+	}
+
+	s := server.NewMCPServer("contextkit", "1.0.0", opts...)
 
 	if d.RoomService == nil || d.ContextService == nil || d.MemoryService == nil {
 		panic("contextkit mcp: service dependencies are required")

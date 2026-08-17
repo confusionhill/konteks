@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
-	"github.com/dika/contextkit/backend/internal/repository"
 )
 
 var (
@@ -24,17 +23,24 @@ type authCacheEntry struct {
 	expiresAt time.Time
 }
 
+// apiKeyValidator is the API-key lookup contract used by AuthProvider. It is
+// satisfied by repository.MCPAuthRepository.
+type apiKeyValidator interface {
+	GetAPIKeyByHash(ctx context.Context, keyHash string) (*domain.APIKey, error)
+	UpdateAPIKeyLastUsed(ctx context.Context, id string) error
+}
+
 // AuthProvider validates the shared api_keys table and resolves an AuthContext
 // ({project_id, api_key_id, is_encrypted}) for every tool invocation. API keys
 // are identified by their SHA-256 hash, mirroring the main backend middleware.
 type AuthProvider struct {
-	authRepo *repository.MCPAuthRepository
+	authRepo apiKeyValidator
 	mu       sync.Mutex
 	cache    map[string]authCacheEntry
 	ttl      time.Duration
 }
 
-func NewAuthProvider(authRepo *repository.MCPAuthRepository) *AuthProvider {
+func NewAuthProvider(authRepo apiKeyValidator) *AuthProvider {
 	return &AuthProvider{
 		authRepo: authRepo,
 		cache:    make(map[string]authCacheEntry),

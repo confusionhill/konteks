@@ -10,26 +10,39 @@ import (
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
-	"github.com/dika/contextkit/backend/internal/repository"
 	"github.com/dika/contextkit/backend/internal/worker"
 	"github.com/google/uuid"
 )
+
+// memoryStore is the memory persistence contract for the MCP memory service.
+type memoryStore interface {
+	Create(ctx context.Context, memory *domain.Memory) error
+	UpdateEmbedding(ctx context.Context, memoryID string, embedding []float32) error
+	Search(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error)
+	ListByRoom(ctx context.Context, projectID string, roomID string, limit int, offset int) ([]domain.Memory, int, error)
+	Delete(ctx context.Context, projectID string, memoryID string) error
+}
+
+// memoryEmbedder asynchronously generates embeddings for stored memories.
+type memoryEmbedder interface {
+	Enqueue(worker.MCPMemoryEmbedTask) error
+}
 
 // MCPMemoryService manages memories and semantic search for the MCP server.
 // add_memory persists immediately with a NULL embedding and queues the embedding
 // generation to the async worker pool, so the tool never blocks on the LLM.
 type MCPMemoryService struct {
-	roomRepo   *repository.MCPRoomRepository
-	memoryRepo *repository.MCPMemoryRepository
-	openRouter domain.OpenRouterServiceClient
-	embedder   *worker.MCPEmbeddingWorker
+	roomRepo   roomStore
+	memoryRepo memoryStore
+	openRouter embeddingClient
+	embedder   memoryEmbedder
 }
 
 func NewMCPMemoryService(
-	roomRepo *repository.MCPRoomRepository,
-	memoryRepo *repository.MCPMemoryRepository,
-	openRouter domain.OpenRouterServiceClient,
-	embedder *worker.MCPEmbeddingWorker,
+	roomRepo roomStore,
+	memoryRepo memoryStore,
+	openRouter embeddingClient,
+	embedder memoryEmbedder,
 ) *MCPMemoryService {
 	return &MCPMemoryService{
 		roomRepo:   roomRepo,
@@ -119,7 +132,14 @@ func (s *MCPMemoryService) SearchMemories(ctx context.Context, auth domain.AuthC
 	if room.ExternalUserID != "" {
 		extUserID = &room.ExternalUserID
 	}
-	return s.memoryRepo.Search(ctx, auth.ProjectID, roomID, extUserID, embedding, 0.5, limit)
+	memories, err := s.memoryRepo.Search(ctx, auth.ProjectID, roomID, extUserID, embedding, 0.5, limit)
+	if err != nil {
+		return nil, err
+	}
+	if memories == nil {
+		memories = []domain.Memory{}
+	}
+	return memories, nil
 }
 
 func (s *MCPMemoryService) ListMemories(ctx context.Context, auth domain.AuthContext, roomID string, limit int, offset int) ([]domain.Memory, int, error) {

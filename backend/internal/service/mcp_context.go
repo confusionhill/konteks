@@ -9,27 +9,44 @@ import (
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
-	"github.com/dika/contextkit/backend/internal/repository"
 	"github.com/google/uuid"
 )
+
+// messageStore is the message persistence contract for the MCP context service.
+type messageStore interface {
+	Create(ctx context.Context, msg *domain.Message) error
+	ListByRoom(ctx context.Context, roomID string, limit int, beforeSeq int64) ([]domain.Message, error)
+	ListByRoomRange(ctx context.Context, roomID string, limit int, offset int) ([]domain.Message, error)
+	CountByRoom(ctx context.Context, roomID string) (int, error)
+}
+
+// memorySearchStore is the memory search contract for context assembly.
+type memorySearchStore interface {
+	Search(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error)
+}
+
+// embeddingClient generates embeddings for context queries.
+type embeddingClient interface {
+	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
+}
 
 // MCPContextService assembles context packages and manages messages for the
 // MCP server. It mirrors the main backend's context engine without the
 // evaluation worker, artifact retrieval, or archive hydration dependencies.
 type MCPContextService struct {
-	roomRepo    *repository.MCPRoomRepository
-	stateRepo   *repository.MCPStateRepository
-	messageRepo *repository.MCPMessageRepository
-	memoryRepo  *repository.MCPMemoryRepository
-	openRouter  domain.OpenRouterServiceClient
+	roomRepo    roomStore
+	stateRepo   stateStore
+	messageRepo messageStore
+	memoryRepo  memorySearchStore
+	openRouter  embeddingClient
 }
 
 func NewMCPContextService(
-	roomRepo *repository.MCPRoomRepository,
-	stateRepo *repository.MCPStateRepository,
-	messageRepo *repository.MCPMessageRepository,
-	memoryRepo *repository.MCPMemoryRepository,
-	openRouter domain.OpenRouterServiceClient,
+	roomRepo roomStore,
+	stateRepo stateStore,
+	messageRepo messageStore,
+	memoryRepo memorySearchStore,
+	openRouter embeddingClient,
 ) *MCPContextService {
 	return &MCPContextService{
 		roomRepo:    roomRepo,
@@ -260,6 +277,14 @@ func (s *MCPContextService) GetContextPackage(ctx context.Context, auth domain.A
 		estimatedTokens += len(mem.Content) / 4
 	}
 
+	processedTokens := summaryTokens + stateTokens
+	for _, m := range history {
+		processedTokens += len(m.Content) / 4
+	}
+	for _, mem := range matchedMemories {
+		processedTokens += len(mem.Content) / 4
+	}
+
 	var childAgents []domain.ChildAgentOverview
 	if req.IncludeChildren {
 		children, errChild := s.roomRepo.ListChildRooms(ctx, auth.ProjectID, roomID)
@@ -282,6 +307,7 @@ func (s *MCPContextService) GetContextPackage(ctx context.Context, auth domain.A
 		ChildAgents:      childAgents,
 		StrategyUsed:     strategy,
 		TokensEstimated:  estimatedTokens,
+		TokensProcessed:  processedTokens,
 	}, nil
 }
 

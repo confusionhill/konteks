@@ -6,17 +6,33 @@ import (
 	"fmt"
 
 	"github.com/dika/contextkit/backend/internal/domain"
-	"github.com/dika/contextkit/backend/internal/repository"
 )
+
+// roomStore is the room persistence contract used by MCPRoomService. It is
+// satisfied by repository.MCPRoomRepository.
+type roomStore interface {
+	Create(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy, initialState json.RawMessage) (*domain.Room, error)
+	GetByID(ctx context.Context, projectID string, roomID string) (*domain.Room, error)
+	Update(ctx context.Context, projectID string, roomID string, description *string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error)
+	UpdateStatus(ctx context.Context, roomID string, status string) error
+	ListByProject(ctx context.Context, projectID string, externalUserID string, limit int, offset int) ([]domain.RoomOverview, int, error)
+	ListChildRooms(ctx context.Context, projectID string, parentRoomID string) ([]domain.ChildAgentOverview, error)
+}
+
+// stateStore is the room-state persistence contract for MCP services.
+type stateStore interface {
+	Get(ctx context.Context, roomID string) (*domain.RoomState, error)
+	Patch(ctx context.Context, roomID string, updates map[string]any, deletes []string) (*domain.RoomState, error)
+}
 
 // MCPRoomService orchestrates project-scoped room lifecycle operations for the
 // MCP server. All queries are scoped to the auth context's project_id.
 type MCPRoomService struct {
-	roomRepo  *repository.MCPRoomRepository
-	stateRepo *repository.MCPStateRepository
+	roomRepo  roomStore
+	stateRepo stateStore
 }
 
-func NewMCPRoomService(roomRepo *repository.MCPRoomRepository, stateRepo *repository.MCPStateRepository) *MCPRoomService {
+func NewMCPRoomService(roomRepo roomStore, stateRepo stateStore) *MCPRoomService {
 	return &MCPRoomService{roomRepo: roomRepo, stateRepo: stateRepo}
 }
 

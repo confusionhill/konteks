@@ -4,7 +4,7 @@ import requests
 
 CONFIG_PATH = "example/secrets/config.json"
 BASE_URL = "http://localhost:8080"
-PROJECT_ID = "b0000000-0000-0000-0000-000000000001"
+PROJECT_ID = "4c15a993-785d-426e-8085-7ecf18564e8b"
 
 # Read API Key & Auth Token
 if not os.path.exists(CONFIG_PATH):

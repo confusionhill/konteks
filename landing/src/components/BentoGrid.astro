@@ -3,103 +3,132 @@
 
 <section id="features" class="py-20 md:py-28 bg-[#F8FAFC]">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    
+
     <!-- Section Header -->
     <div class="text-center max-w-3xl mx-auto space-y-4 mb-16">
-      <span class="text-xs font-bold uppercase tracking-wider text-indigo-600 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200/60">
-        Features
-      </span>
+      <div class="flex items-center justify-center gap-3">
+        <span class="h-px w-8 bg-indigo-200"></span>
+        <span class="font-mono text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Features</span>
+        <span class="h-px w-8 bg-indigo-200"></span>
+      </div>
       <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-        Built to make your AI agents feel human
+        Built for conversations that last
       </h2>
       <p class="text-slate-600 text-base sm:text-lg">
-        Everything you need to deliver stateful, intelligent agent experiences without building memory infrastructure from scratch.
+        Everything needed to keep an AI conversation alive across models, frameworks, and
+        frontends — without building it yourself.
       </p>
     </div>
 
-    <!-- Bento Grid Cards -->
     <div class="grid md:grid-cols-2 gap-8">
-      
-      <!-- Flagship E2EE Feature Card (Full Width) -->
-      <div class="md:col-span-2 bg-gradient-to-r from-slate-900 to-indigo-950 p-8 rounded-xl border border-indigo-500/30 text-white shadow-xl hover:-translate-y-0.5 transition-all duration-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden group">
-        <div class="space-y-3 max-w-2xl z-10">
-          <div class="flex items-center gap-2">
-            <span class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-base">🔐</span>
-            <span class="text-xs font-mono font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/80 px-2.5 py-1 rounded border border-indigo-500/30">Optional Module • Paid Tiers</span>
+
+      <!-- Flagship: switch freely -->
+      <div class="md:col-span-2 bg-gradient-to-r from-slate-900 to-indigo-950 p-8 sm:p-10 rounded-2xl border border-indigo-500/30 text-white shadow-xl relative overflow-hidden">
+        <div class="absolute -top-24 -right-16 w-72 h-72 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="relative z-10">
+          <div class="flex flex-wrap items-center gap-3 mb-6">
+            <span class="text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-white/10 border border-white/10">Claude Desktop</span>
+            <svg class="w-4 h-4 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+            <span class="text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-white/10 border border-white/10">Antigravity</span>
+            <svg class="w-4 h-4 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+            <span class="text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-white/10 border border-white/10">any AI app</span>
+            <span class="text-xs font-semibold text-indigo-300 ml-auto">same conversation · still knows</span>
           </div>
-          <h3 class="text-2xl sm:text-3xl font-extrabold text-white">Zero-Trust E2EE & Encrypted Vector Search</h3>
-          <p class="text-slate-300 text-sm leading-relaxed">
-            Encrypt message payloads with AES-256-GCM envelope encryption and perform distance-preserving vector search using orthonormal matrix rotation (<code class="text-indigo-300 bg-slate-800 px-1 py-0.5 rounded font-mono">R · v</code>). Konteks operates as a 100% Zero-Knowledge platform.
+          <h3 class="text-2xl sm:text-3xl font-extrabold text-white mb-3">Switch freely. Never forget.</h3>
+          <p class="text-slate-300 text-sm leading-relaxed max-w-2xl">
+            Open a conversation in Claude Desktop, continue it in Antigravity, pick it up in
+            any other AI app — the thread follows you. What was said, what was decided,
+            what's next. Nobody has to start over.
           </p>
-        </div>
-        <div class="shrink-0 z-10">
-          <a href="#security-e2ee" class="inline-flex items-center gap-2 text-xs font-mono font-bold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 rounded-lg transition-colors shadow-md">
-            Learn Security Architecture &rarr;
+          <a href="#quickstart" class="inline-flex items-center gap-2 mt-6 text-sm font-semibold text-indigo-300 hover:text-white transition-colors">
+            Try it in 5 minutes
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6l6 6-6 6" />
+            </svg>
           </a>
         </div>
       </div>
-      
+
       <!-- Feature 1 -->
-      <div class="bg-white p-8 rounded-xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
+      <div class="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
         <div class="space-y-4">
-          <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">
-            🏠
+          <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
           </div>
-          <h3 class="text-2xl font-bold text-slate-900">Stateful Conversation Rooms</h3>
+          <h3 class="text-2xl font-bold text-slate-900">One place for every conversation</h3>
           <p class="text-slate-600 text-sm leading-relaxed">
-            Every chat session gets its own isolated, persistent container. Konteks tracks raw messages, active topics, user preferences, and temporal state in one place.
+            Each room holds its messages, state, summary, and memory together — so nothing
+            scatters across five different systems.
           </p>
         </div>
         <div class="mt-6 pt-4 border-t border-slate-100 text-xs font-mono text-indigo-600 font-semibold">
-          ✓ Room-first persistent abstraction
+          Rooms are the core primitive
         </div>
       </div>
 
       <!-- Feature 2 -->
-      <div class="bg-white p-8 rounded-xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
+      <div class="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
         <div class="space-y-4">
-          <div class="w-10 h-10 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center font-bold text-lg">
-            🔗
+          <div class="w-10 h-10 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
           </div>
-          <h3 class="text-2xl font-bold text-slate-900">Smart Reference Linking</h3>
+          <h3 class="text-2xl font-bold text-slate-900">Keeps memory honest</h3>
           <p class="text-slate-600 text-sm leading-relaxed">
-            Automatically resolves ambiguous pronouns like <em>"it"</em>, <em>"that option"</em>, or <em>"the cheaper one"</em> to the exact item ID discussed previously.
+            Outdated facts get flagged and replaced.
           </p>
         </div>
         <div class="mt-6 pt-4 border-t border-slate-100 text-xs font-mono text-violet-600 font-semibold">
-          ✓ Native entity & pronoun resolution
+          Stale facts: flagged
         </div>
       </div>
 
       <!-- Feature 3 -->
-      <div class="bg-white p-8 rounded-xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
+      <div class="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
         <div class="space-y-4">
-          <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">
-            🧹
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+            </svg>
           </div>
-          <h3 class="text-2xl font-bold text-slate-900">Automatic Chat Compaction</h3>
+          <h3 class="text-2xl font-bold text-slate-900">Sends only what matters</h3>
           <p class="text-slate-600 text-sm leading-relaxed">
-            Background workers continuously summarize long-running conversations into concise summaries so your context window never overflows.
+            Each reply gets the pieces of context it needs — not the whole history. Faster
+            answers, leaner prompts, happier users.
           </p>
         </div>
-        <div class="mt-6 pt-4 border-t border-slate-100 text-xs font-mono text-indigo-600 font-semibold">
-          ✓ Async background summarizer
+        <div class="mt-6 pt-4 border-t border-slate-100 text-xs font-mono text-emerald-600 font-semibold">
+          Relevant context, not raw history
         </div>
       </div>
 
       <!-- Feature 4 -->
-      <div class="bg-white p-8 rounded-xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
+      <div class="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-soft-indigo hover:shadow-soft-indigo-hover hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
         <div class="space-y-4">
-          <div class="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-lg">
-            🔓
+          <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 20l5.5-3.5m2-6.5a3 3 0 0 1 3 3" />
+              <circle cx="22" cy="16" r="1.5" />
+              <circle cx="8" cy="3" r="1.5" />
+              <circle cx="3" cy="14" r="1.5" />
+              <path d="M8 3.5a8 8 0 0 1 9 12l-2 1.4" />
+            </svg>
           </div>
-          <h3 class="text-2xl font-bold text-slate-900">Zero Lock-In Architecture</h3>
+          <h3 class="text-2xl font-bold text-slate-900">Fits any stack</h3>
           <p class="text-slate-600 text-sm leading-relaxed">
-            Bring Your Own Agent (BYOA) and Bring Your Own Data (BYOD). Works with LangGraph, LlamaIndex, custom Python scripts, or Go apps seamlessly.
+            Bring your own model, agent framework, tools, and data. Integrate over a plain
+            REST API — no migration, no rewrite, no lock-in.
           </p>
         </div>
-        <div class="mt-6 pt-4 border-t border-slate-100 text-xs font-mono text-emerald-600 font-semibold">
-          ✓ Model & Agent framework agnostic
+        <div class="mt-6 pt-4 border-t border-slate-100 text-xs font-mono text-indigo-600 font-semibold">
+          Model- and framework-agnostic
         </div>
       </div>
 

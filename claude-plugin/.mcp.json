@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "contextkit-adapter": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/contextkit_adapter.py"],
+      "env": {
+        "CONTEXTKIT_REMOTE_URL": "http://127.0.0.1:8099/mcp"
+      }
+    }
+  }
+}

@@ -45,8 +45,13 @@ MCP_PORT=8099 ./mcp_server --transport http
 | Database URL         | —             | `DATABASE_URL`     | from `secrets/config.json` |
 
 In stdio mode the API key is resolved at startup and applied to every request.
-In HTTP mode each request must send the key via the `X-API-Key` header or
-`Authorization: Bearer <key>`.
+In HTTP mode each request must send the key via the `X-API-Key` header,
+`Authorization: Bearer <key>`, **or** the `api_key` (aliased `token`) query
+parameter on the request URL: `https://mcp.contextkit.app/mcp?api_key=ck_...`.
+The query-param form exists for MCP clients that cannot set headers, such as
+Claude Desktop / claude.ai *remote* MCP servers, which reach the server from
+Anthropic's cloud and therefore require a publicly reachable HTTPS URL. Keep
+tokens out of logs; rotate the key if it leaks via URL or proxy logs.
 
 ## Authentication model
 

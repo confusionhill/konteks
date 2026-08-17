@@ -144,6 +144,16 @@ func runHTTPServer(mcpServer *server.MCPServer, authProvider *mcp.AuthProvider, 
 					rawKey = strings.TrimSpace(authHeader[len("Bearer "):])
 				}
 			}
+			if rawKey == "" {
+				// Query-param credentials support MCP clients that cannot set
+				// headers, such as Claude Desktop / claude.ai remote servers
+				// (e.g. https://mcp.contextkit.app/mcp?api_key=ck_...).
+				queryKey := r.URL.Query().Get("api_key")
+				if queryKey == "" {
+					queryKey = r.URL.Query().Get("token")
+				}
+				rawKey = queryKey
+			}
 			auth, err := authProvider.Authenticate(ctx, rawKey)
 			if err != nil {
 				return mcp.WithAuthError(ctx, err)

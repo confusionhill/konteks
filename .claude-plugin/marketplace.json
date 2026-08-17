@@ -1,0 +1,15 @@
+{
+  "name": "contextkit-marketplace",
+  "owner": {
+    "name": "Dika"
+  },
+  "description": "Context-as-a-Service (CaaS): persistent shared context for Claude",
+  "plugins": [
+    {
+      "name": "contextkit",
+      "source": "./claude-plugin",
+      "description": "Persistent shared context across sessions (ContextKit CaaS). Connect an API key and a room, then let multiple agents share the same persistent context.",
+      "version": "0.1.0"
+    }
+  ]
+}

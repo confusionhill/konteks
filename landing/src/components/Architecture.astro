@@ -3,31 +3,35 @@
 
 <section id="how-it-works" class="py-20 md:py-28 bg-white border-t border-slate-200/60">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    
+
     <!-- Section Header -->
     <div class="text-center max-w-3xl mx-auto space-y-4 mb-16">
-      <span class="text-xs font-bold uppercase tracking-wider text-violet-600 px-3 py-1 rounded-full bg-violet-50 border border-violet-200/60">
-        3-Step Integration
-      </span>
+      <div class="flex items-center justify-center gap-3">
+        <span class="h-px w-8 bg-indigo-200"></span>
+        <span class="font-mono text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">How it works</span>
+        <span class="h-px w-8 bg-indigo-200"></span>
+      </div>
       <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-        How Konteks fits seamlessly into your app
+        One conversation, three steps.
       </h2>
       <p class="text-slate-600 text-base sm:text-lg">
-        You keep your existing LLM prompts, reasoning logic, and tools. Konteks sits underneath as your intelligent memory and context layer.
+        Your reasoning, your tools, your model. Konteks just keeps the conversation —
+        nothing else changes in your stack.
       </p>
     </div>
 
-    <!-- 3 Step Process Grid -->
+    <!-- 3 Steps -->
     <div class="grid lg:grid-cols-3 gap-8">
-      
+
       <!-- Step 1 -->
       <div class="relative bg-slate-50 p-8 rounded-xl border border-slate-200/80 space-y-4">
         <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white font-extrabold text-lg flex items-center justify-center shadow-md shadow-indigo-500/20">
           1
         </div>
-        <h3 class="text-xl font-bold text-slate-900">Save User Messages</h3>
+        <h3 class="text-xl font-bold text-slate-900">Save the message</h3>
         <p class="text-slate-600 text-sm leading-relaxed">
-          Whenever a user sends a message, store it into a stateful Konteks <code>Room</code> via a simple API call.
+          Every message a user sends is stored in its room, in order, with everything else
+          in that conversation.
         </p>
         <div class="p-3 bg-slate-900 rounded-lg text-slate-200 font-mono text-xs overflow-x-auto">
           POST /v1/rooms/room_123/messages
@@ -39,9 +43,10 @@
         <div class="w-10 h-10 rounded-lg bg-violet-600 text-white font-extrabold text-lg flex items-center justify-center shadow-md shadow-violet-500/20">
           2
         </div>
-        <h3 class="text-xl font-bold text-slate-900">Get Clean Context</h3>
+        <h3 class="text-xl font-bold text-slate-900">Get the context</h3>
         <p class="text-slate-600 text-sm leading-relaxed">
-          Fetch the optimal context package—automatically compiled with relevant history, active state, and entity links.
+          Konteks pulls together what this reply needs — what was said, what's decided, what
+          matters — as one clean package.
         </p>
         <div class="p-3 bg-slate-900 rounded-lg text-slate-200 font-mono text-xs overflow-x-auto">
           POST /v1/rooms/room_123/context
@@ -53,9 +58,10 @@
         <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white font-extrabold text-lg flex items-center justify-center shadow-md shadow-indigo-500/20">
           3
         </div>
-        <h3 class="text-xl font-bold text-slate-900">Run Your AI Agent</h3>
+        <h3 class="text-xl font-bold text-slate-900">Run your agent</h3>
         <p class="text-slate-600 text-sm leading-relaxed">
-          Pass the clean context package directly into your LLM prompt (OpenAI, Claude, LangGraph) and return the response.
+          Send the package into your model or framework. Your reasoning stays with you —
+          we just hand off the memory.
         </p>
         <div class="p-3 bg-slate-900 rounded-lg text-emerald-400 font-mono text-xs overflow-x-auto">
           llm.generate(prompt=context)

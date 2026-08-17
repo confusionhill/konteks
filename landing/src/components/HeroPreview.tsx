@@ -1,95 +1,122 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+
+const FRONTS = ['agent', 'bot', 'chat', 'assistant', 'copilot', 'support'];
+
+interface Turn {
+  role: 'user' | 'assistant';
+  front?: number;
+  text: string;
+}
+
+const THREAD: Turn[] = [
+  { role: 'user', text: 'Find me a hotel in Bali under $150.' },
+  { role: 'assistant', front: 0, text: 'Five options fit your budget. Want the one with a pool?' },
+  { role: 'user', text: 'The one with a pool, yes.' },
+  { role: 'assistant', front: 1, text: 'That\'s the Grand Hyatt. Book for Friday?' },
+  { role: 'user', text: 'Book it.' },
+  { role: 'assistant', front: 2, text: 'Booked — check-in Friday, Grand Hyatt, Bali.' },
+  { role: 'user', text: 'Wait, what time is check-in?' },
+  { role: 'assistant', front: 3, text: '3 PM. Still in our shared context.' },
+  { role: 'user', text: 'And what was my budget again?' },
+  { role: 'assistant', front: 4, text: 'Under $150 a night.' },
+  { role: 'user', text: 'Did I still want the pool?' },
+  { role: 'assistant', front: 5, text: 'Pool, yes — we kept that too.' },
+];
+
+const MEMORY = ['Bali', 'under $150', 'pool', 'Grand Hyatt', 'Friday'];
 
 export default function HeroPreview() {
-  const [activeTab, setActiveTab] = useState<'compiled' | 'raw'>('compiled');
+  const [step, setStep] = useState(1);
+
+  useEffect(() => {
+    const id = setInterval(() => setStep((s) => (s >= THREAD.length ? 1 : s + 1)), 1200);
+    return () => clearInterval(id);
+  }, []);
+
+  const visible = THREAD.slice(0, step);
+  const lastFront = [...visible].reverse().find((t) => t.role === 'assistant');
+  const frontLabel = FRONTS[lastFront?.front ?? 0];
 
   return (
-    <div className="w-full max-w-xl mx-auto rounded-xl bg-white border border-slate-200/80 shadow-soft-indigo overflow-hidden transition-all duration-300 hover:shadow-soft-indigo-hover">
-      {/* Window Titlebar */}
+    <div className="w-full max-w-xl mx-auto rounded-2xl bg-white border border-slate-200/80 shadow-soft-indigo overflow-hidden">
+      {/* Title bar */}
       <div className="px-4 py-3 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-400"></div>
-          <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-          <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
-          <span className="ml-2 text-xs font-mono text-slate-500 font-medium">room_9842 / context_compiled</span>
+          <div className="w-3 h-3 rounded-full bg-red-400" />
+          <div className="w-3 h-3 rounded-full bg-amber-400" />
+          <div className="w-3 h-3 rounded-full bg-emerald-400" />
+          <span className="ml-1 text-xs font-mono text-slate-500 font-medium">room_9842</span>
         </div>
-        <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg text-xs font-medium text-slate-600">
-          <button
-            type="button"
-            onClick={() => setActiveTab('compiled')}
-            className={`px-2.5 py-1 rounded-md transition-all ${
-              activeTab === 'compiled' ? 'bg-white text-indigo-600 shadow-sm font-semibold' : 'hover:text-slate-900'
-            }`}
-          >
-            Konteks Lean Package
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('raw')}
-            className={`px-2.5 py-1 rounded-md transition-all ${
-              activeTab === 'raw' ? 'bg-white text-red-600 shadow-sm font-semibold' : 'hover:text-slate-900'
-            }`}
-          >
-            Raw Unmanaged Prompt
-          </button>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[11px] font-semibold text-emerald-700">memory on</span>
         </div>
       </div>
 
-      {/* Content View */}
-      <div className="p-5 font-mono text-xs">
-        {activeTab === 'compiled' ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="text-emerald-600 font-semibold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Context Ready for LLM
-              </span>
-              <span className="text-slate-400">Payload Size: <strong className="text-slate-700">142 tokens</strong></span>
-            </div>
-
-            <div className="space-y-2 text-slate-700">
-              <div className="p-2.5 rounded-lg bg-indigo-50/60 border border-indigo-100/80">
-                <span className="text-indigo-600 font-bold block mb-1">▶ SUMMARY:</span>
-                User comparing Bali hotels. Preferred budget &lt;$150/night with pool.
+      {/* Conversation */}
+      <div className="px-5 pt-5 pb-4 space-y-3 h-[300px] overflow-hidden flex flex-col justify-end">
+        {visible.map((turn, i) => {
+          const isUser = turn.role === 'user';
+          return (
+            <motion.div
+              key={`${turn.text}-${i}`}
+              initial={{ y: 8, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[85%] px-3.5 py-2 rounded-xl text-xs leading-relaxed ${
+                  isUser
+                    ? 'bg-indigo-600 text-white rounded-br-sm'
+                    : 'bg-slate-100 text-slate-700 border border-slate-200/70 rounded-bl-sm'
+                }`}
+              >
+                {!isUser && (
+                  <span className="block mb-1 text-[10px] font-bold tracking-wide text-indigo-600">
+                    {FRONTS[turn.front ?? 0]}
+                  </span>
+                )}
+                {turn.text}
               </div>
+            </motion.div>
+          );
+        })}
+      </div>
 
-              <div className="p-2.5 rounded-lg bg-violet-50/60 border border-violet-100/80">
-                <span className="text-violet-600 font-bold block mb-1">▶ ACTIVE STATE & RESOLVED ENTITIES:</span>
-                {"{ location: 'Bali', entity: 'hotel_123 (Grand Hyatt)', date: 'Friday' }"}
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
-                <span className="text-slate-500 font-bold block mb-1">▶ RELEVANT TURN:</span>
-                User: "Does it have a pool?"
-              </div>
-            </div>
-
-            <div className="pt-2 flex items-center justify-between text-[11px] text-slate-500">
-              <span>Token Savings: <strong className="text-emerald-600">96.4% lower cost</strong></span>
-              <span>State Resolution: <strong className="text-indigo-600">Active & Compact</strong></span>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3 text-slate-500">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="text-red-600 font-semibold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                Bloated Chat History Payload
-              </span>
-              <span className="text-slate-400">Payload Size: <strong className="text-red-600">4,280 tokens</strong></span>
-            </div>
-
-            <div className="p-3 bg-red-50/40 border border-red-100 rounded-lg text-slate-600 space-y-1.5 opacity-90 max-h-48 overflow-y-auto">
-              <p className="text-slate-400">[Lines 1-45: System Prompt & Previous Hotel List...]</p>
-              <p>User: "Find me a hotel in Bali."</p>
-              <p>Assistant: "Here are 5 options: 1. Grand Hyatt ($140), 2. Padma Resort ($220)..."</p>
-              <p>User: "Which one is cheaper?"</p>
-              <p>Assistant: "Option 1 Grand Hyatt is cheaper..."</p>
-              <p className="text-red-500 font-semibold">[Warning: Pronoun "it" ambiguous without state]</p>
-              <p>User: "Does it have a pool?"</p>
-            </div>
-          </div>
-        )}
+      {/* Still remembers strip */}
+      <div className="mx-4 mb-4 rounded-xl bg-indigo-50/70 border border-indigo-100/80 px-4 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wide">
+            still remembers
+          </span>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={frontLabel}
+              initial={{ y: 6, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -6, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="text-[11px] font-semibold text-slate-500"
+            >
+              now on <span className="text-indigo-600">{frontLabel}</span>
+            </motion.span>
+          </AnimatePresence>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {MEMORY.map((m) => (
+            <span
+              key={m}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-indigo-200/70 text-[11px] font-medium text-slate-700"
+            >
+              <svg className="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+              </svg>
+              {m}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

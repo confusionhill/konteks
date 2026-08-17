@@ -12,6 +12,7 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -o seed ./cmd/seed
 RUN CGO_ENABLED=0 GOOS=linux go build -o archiver ./cmd/archiver
+RUN CGO_ENABLED=0 GOOS=linux go build -o mcp_server ./cmd/mcp_server
 
 # Run stage
 FROM alpine:3.18
@@ -23,6 +24,7 @@ WORKDIR /app
 COPY --from=builder /app/server .
 COPY --from=builder /app/seed .
 COPY --from=builder /app/archiver .
+COPY --from=builder /app/mcp_server .
 COPY --from=builder /app/db/migrations ./db/migrations
 
 EXPOSE 8080

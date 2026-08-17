@@ -1,0 +1,8 @@
+{
+  "name": "contextkit",
+  "displayName": "ContextKit",
+  "version": "0.1.0",
+  "description": "Persistent shared context across Claude Code sessions (ContextKit CaaS). Connect an API key and a room, then let multiple agents share the same persistent context.",
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills"
+}

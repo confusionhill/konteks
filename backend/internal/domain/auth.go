@@ -56,6 +56,20 @@ type APIKey struct {
 	RevokedAt  *time.Time `db:"revoked_at" json:"revoked_at,omitempty"`
 }
 
+// AuthContext carries the authentication scope resolved from an API key.
+// It is resolved at the MCP transport boundary and threaded through the
+// service and repository layers so that every query is scoped to one project.
+type AuthContext struct {
+	ProjectID   string
+	APIKeyID    string
+	IsEncrypted bool
+}
+
+// Valid reports whether the auth context carries a usable project scope.
+func (a AuthContext) Valid() bool {
+	return a.ProjectID != ""
+}
+
 type AuthRepository interface {
 	// User operations
 	CreateUser(ctx context.Context, email, passwordHash, name string) (*User, error)

@@ -37,9 +37,6 @@ func NewMCPRoomService(roomRepo roomStore, stateRepo stateStore) *MCPRoomService
 }
 
 func (s *MCPRoomService) CreateRoom(ctx context.Context, auth domain.AuthContext, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy, initialState json.RawMessage) (*domain.Room, error) {
-	if externalUserID == "" {
-		return nil, fmt.Errorf("external_user_id is required")
-	}
 	return s.roomRepo.Create(ctx, auth.ProjectID, externalUserID, description, parentRoomID, stateSchema, defaultPolicy, initialState)
 }
 

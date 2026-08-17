@@ -34,8 +34,9 @@ func (r *MCPMessageRepository) Create(ctx context.Context, msg *domain.Message) 
 	query := `
 		INSERT INTO messages (id, room_id, role, content, sequence, tokens_input, tokens_output, cost_total, is_encrypted, encryption_metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING created_at
 	`
-	if _, err := tx.ExecContext(ctx, query, msg.ID, msg.RoomID, msg.Role, msg.Content, msg.Sequence, msg.TokensInput, msg.TokensOutput, msg.CostTotal, msg.IsEncrypted, msg.EncryptionMetadata); err != nil {
+	if err := tx.GetContext(ctx, &msg.CreatedAt, query, msg.ID, msg.RoomID, msg.Role, msg.Content, msg.Sequence, msg.TokensInput, msg.TokensOutput, msg.CostTotal, msg.IsEncrypted, msg.EncryptionMetadata); err != nil {
 		return err
 	}
 	return tx.Commit()

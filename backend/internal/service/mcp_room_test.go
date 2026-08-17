@@ -100,12 +100,15 @@ func newRoomTestService(room *domain.Room, state *domain.RoomState) (*MCPRoomSer
 	return NewMCPRoomService(rs, ss), rs, ss
 }
 
-func TestRoomService_CreateRoom_RequiresExternalUser(t *testing.T) {
-	svc, _, _ := newRoomTestService(nil, nil)
+func TestRoomService_CreateRoom_AllowsEmptyExternalUser(t *testing.T) {
+	svc, rs, _ := newRoomTestService(nil, nil)
 	auth := domain.AuthContext{ProjectID: "proj-a"}
-	_, err := svc.CreateRoom(context.Background(), auth, "", "", nil, nil, nil, nil)
-	if err == nil {
-		t.Fatal("expected error when external_user_id is empty")
+	_, err := svc.CreateRoom(context.Background(), auth, "", "desc", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rs.createProjectID != "proj-a" {
+		t.Fatalf("expected project scope proj-a, got %q", rs.createProjectID)
 	}
 }
 

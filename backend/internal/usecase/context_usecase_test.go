@@ -35,7 +35,7 @@ type mockRoomRepo struct {
 	states map[string]*domain.RoomState
 }
 
-func (m *mockRoomRepo) Create(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy) (*domain.Room, error) {
+func (m *mockRoomRepo) Create(ctx context.Context, projectID string, externalUserID string, description string, parentRoomID *string, stateSchema json.RawMessage, defaultPolicy *domain.ContextPolicy, initialState json.RawMessage) (*domain.Room, error) {
 	return nil, nil
 }
 func (m *mockRoomRepo) GetByID(ctx context.Context, projectID string, roomID string) (*domain.Room, error) {
@@ -68,6 +68,9 @@ func (m *mockRoomRepo) UpdateStatus(ctx context.Context, roomID string, status s
 		r.Status = status
 	}
 	return nil
+}
+func (m *mockRoomRepo) PatchState(ctx context.Context, roomID string, updates map[string]any, deletes []string) (*domain.RoomState, error) {
+	return nil, nil
 }
 func (m *mockRoomRepo) ArchiveRoomTx(ctx context.Context, roomID string, archiveS3Path string) error {
 	return nil

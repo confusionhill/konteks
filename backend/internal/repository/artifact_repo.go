@@ -10,7 +10,6 @@ import (
 
 	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/jmoiron/sqlx"
-	"github.com/lib/pq"
 )
 
 type artifactRepository struct {
@@ -292,6 +291,19 @@ func (r *artifactRepository) ListArtifacts(ctx context.Context, projectID string
 }
 
 func (r *artifactRepository) DeleteArtifact(ctx context.Context, artifactID string) error {
+	if r.vectorStore != nil {
+		chunkQuery := `SELECT id FROM artifact_chunks WHERE artifact_id = $1`
+		var ids []string
+		if err := r.db.SelectContext(ctx, &ids, chunkQuery, artifactID); err != nil {
+			return err
+		}
+		if len(ids) > 0 {
+			if errVec := r.vectorStore.DeleteArtifactChunkVectors(ctx, ids); errVec != nil {
+				log.Printf("[ArtifactRepo Warning]: failed to purge artifact chunk vectors: %v", errVec)
+			}
+		}
+	}
+
 	query := `DELETE FROM artifacts WHERE id = $1`
 	_, err := r.db.ExecContext(ctx, query, artifactID)
 	return err
@@ -309,8 +321,8 @@ func (r *artifactRepository) CreateChunks(ctx context.Context, chunks []domain.A
 	defer tx.Rollback()
 
 	query := `
-		INSERT INTO artifact_chunks (id, artifact_id, project_id, chunk_index, section_heading, content, embedding)
-		VALUES ($1, $2, $3, $4, $5, $6, $7::vector)
+		INSERT INTO artifact_chunks (id, artifact_id, project_id, chunk_index, section_heading, content, vector_status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 	stmt, err := tx.PreparexContext(ctx, query)
 	if err != nil {
@@ -319,8 +331,14 @@ func (r *artifactRepository) CreateChunks(ctx context.Context, chunks []domain.A
 	defer stmt.Close()
 
 	for _, chunk := range chunks {
-		embStr := float32ArrayToString(chunk.Embedding)
-		_, err := stmt.ExecContext(ctx, chunk.ID, chunk.ArtifactID, chunk.ProjectID, chunk.ChunkIndex, chunk.SectionHeading, chunk.Content, embStr)
+		status := chunk.VectorStatus
+		if status == "" {
+			status = domain.ChunkVectorStatusIndexed
+			if len(chunk.Embedding) == 0 {
+				status = domain.ChunkVectorStatusPending
+			}
+		}
+		_, err := stmt.ExecContext(ctx, chunk.ID, chunk.ArtifactID, chunk.ProjectID, chunk.ChunkIndex, chunk.SectionHeading, chunk.Content, status)
 		if err != nil {
 			return fmt.Errorf("failed inserting chunk index %d: %w", chunk.ChunkIndex, err)
 		}
@@ -339,9 +357,85 @@ func (r *artifactRepository) CreateChunks(ctx context.Context, chunks []domain.A
 	return nil
 }
 
+// ListPendingChunks returns chunks whose embedding still needs to be generated,
+// oldest first, capped at limit.
+func (r *artifactRepository) ListPendingChunks(ctx context.Context, limit int) ([]domain.ArtifactChunk, error) {
+	query := `
+		SELECT id, artifact_id, project_id, chunk_index, section_heading, content, vector_status, created_at
+		FROM artifact_chunks
+		WHERE vector_status = $1
+		ORDER BY created_at ASC
+		LIMIT $2
+	`
+	var rows []struct {
+		ID             string    `db:"id"`
+		ArtifactID     string    `db:"artifact_id"`
+		ProjectID      string    `db:"project_id"`
+		ChunkIndex     int       `db:"chunk_index"`
+		SectionHeading string    `db:"section_heading"`
+		Content        string    `db:"content"`
+		VectorStatus   string    `db:"vector_status"`
+		CreatedAt      time.Time `db:"created_at"`
+	}
+	if err := r.db.SelectContext(ctx, &rows, query, domain.ChunkVectorStatusPending, limit); err != nil {
+		return nil, err
+	}
+
+	chunks := make([]domain.ArtifactChunk, 0, len(rows))
+	for _, row := range rows {
+		chunks = append(chunks, domain.ArtifactChunk{
+			ID:             row.ID,
+			ArtifactID:     row.ArtifactID,
+			ProjectID:      row.ProjectID,
+			ChunkIndex:     row.ChunkIndex,
+			SectionHeading: row.SectionHeading,
+			Content:        row.Content,
+			VectorStatus:   row.VectorStatus,
+			CreatedAt:      row.CreatedAt,
+		})
+	}
+	return chunks, nil
+}
+
+// UpsertChunkVectors pushes embeddings for existing chunks to the vector store
+// without touching their Postgres rows.
+func (r *artifactRepository) UpsertChunkVectors(ctx context.Context, chunks []domain.ArtifactChunk, groupName string) error {
+	if r.vectorStore == nil {
+		return nil
+	}
+	return r.vectorStore.UpsertArtifactChunkVectors(ctx, chunks, groupName)
+}
+
+// MarkChunksIndexed flips pending chunks to indexed after their embeddings
+// have been successfully pushed to the vector store.
+func (r *artifactRepository) MarkChunksIndexed(ctx context.Context, chunkIDs []string) error {
+	if len(chunkIDs) == 0 {
+		return nil
+	}
+	query := `UPDATE artifact_chunks SET vector_status = $1 WHERE id = ANY($2::uuid[])`
+	_, err := r.db.ExecContext(ctx, query, domain.ChunkVectorStatusIndexed, chunkIDs)
+	return err
+}
+
 func (r *artifactRepository) DeleteChunksByArtifact(ctx context.Context, artifactID string) error {
-	query := `DELETE FROM artifact_chunks WHERE artifact_id = $1`
-	_, err := r.db.ExecContext(ctx, query, artifactID)
+	query := `
+		SELECT id
+		FROM artifact_chunks
+		WHERE artifact_id = $1
+	`
+	var ids []string
+	if err := r.db.SelectContext(ctx, &ids, query, artifactID); err != nil {
+		return err
+	}
+
+	if r.vectorStore != nil && len(ids) > 0 {
+		if errVec := r.vectorStore.DeleteArtifactChunkVectors(ctx, ids); errVec != nil {
+			log.Printf("[ArtifactRepo Warning]: failed to purge artifact chunk vectors: %v", errVec)
+		}
+	}
+
+	deleteQuery := `DELETE FROM artifact_chunks WHERE artifact_id = $1`
+	_, err := r.db.ExecContext(ctx, deleteQuery, artifactID)
 	return err
 }
 
@@ -353,32 +447,64 @@ func (r *artifactRepository) SearchChunksVector(
 	excludedArtifactIDs []string,
 	excludedGroupNames []string,
 ) ([]domain.ArtifactSearchResult, error) {
-	embStr := float32ArrayToString(queryEmbedding)
+	if len(queryEmbedding) == 0 {
+		return []domain.ArtifactSearchResult{}, nil
+	}
+	if r.vectorStore == nil {
+		return nil, fmt.Errorf("vector store not configured")
+	}
 
+	matches, err := r.vectorStore.SearchArtifactChunkVectors(ctx, projectID, queryEmbedding, limit, excludedArtifactIDs, excludedGroupNames)
+	if err != nil {
+		return nil, fmt.Errorf("vector search failed: %w", err)
+	}
+	if len(matches) == 0 {
+		return []domain.ArtifactSearchResult{}, nil
+	}
+
+	ids := make([]string, 0, len(matches))
+	scoreByID := make(map[string]float64, len(matches))
+	for _, m := range matches {
+		ids = append(ids, m.ID)
+		scoreByID[m.ID] = m.Score
+	}
+
+	chunks, err := r.getChunksByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]domain.ArtifactSearchResult, 0, len(matches))
+	for _, id := range ids {
+		ch, ok := chunks[id]
+		if !ok {
+			continue
+		}
+		results = append(results, domain.ArtifactSearchResult{
+			Chunk:          ch.Chunk,
+			Artifact:       ch.Artifact,
+			RelevanceScore: scoreByID[id],
+		})
+	}
+	return results, nil
+}
+
+type artifactChunkRow struct {
+	Chunk    domain.ArtifactChunk
+	Artifact domain.Artifact
+}
+
+func (r *artifactRepository) getChunksByIDs(ctx context.Context, ids []string) (map[string]artifactChunkRow, error) {
 	query := `
 		SELECT c.id, c.artifact_id, c.project_id, c.chunk_index, c.section_heading, c.content,
-		       a.file_path, a.title, a.s3_key, a.content_hash, a.metadata, g.name as group_name,
-		       (1 - (c.embedding <=> $2::vector)) as relevance_score
+		       a.file_path, a.title, a.s3_key, a.content_hash, a.metadata, COALESCE(g.name, '') as group_name
 		FROM artifact_chunks c
 		JOIN artifacts a ON c.artifact_id = a.id
 		LEFT JOIN artifact_groups g ON a.group_id = g.id
-		WHERE c.project_id = $1
-		  AND ($3::uuid[] IS NULL OR c.artifact_id != ALL($3::uuid[]))
-		  AND ($4::text[] IS NULL OR g.name IS NULL OR g.name != ALL($4::text[]))
-		ORDER BY c.embedding <=> $2::vector ASC
-		LIMIT $5
+		WHERE c.id = ANY($1::uuid[])
 	`
 
-	var artifactIDsParam pq.StringArray = nil
-	if len(excludedArtifactIDs) > 0 {
-		artifactIDsParam = pq.StringArray(excludedArtifactIDs)
-	}
-	var groupNamesParam pq.StringArray = nil
-	if len(excludedGroupNames) > 0 {
-		groupNamesParam = pq.StringArray(excludedGroupNames)
-	}
-
-	type dbSearchResultRow struct {
+	type dbRow struct {
 		ID             string         `db:"id"`
 		ArtifactID     string         `db:"artifact_id"`
 		ProjectID      string         `db:"project_id"`
@@ -390,28 +516,21 @@ func (r *artifactRepository) SearchChunksVector(
 		S3Key          string         `db:"s3_key"`
 		ContentHash    string         `db:"content_hash"`
 		Metadata       []byte         `db:"metadata"`
-		GroupName      sql.NullString `db:"group_name"`
-		RelevanceScore float64        `db:"relevance_score"`
+		GroupName      string         `db:"group_name"`
 	}
 
-	var rows []dbSearchResultRow
-	err := r.db.SelectContext(ctx, &rows, query, projectID, embStr, artifactIDsParam, groupNamesParam, limit)
-	if err != nil {
-		return nil, fmt.Errorf("vector search failed: %w", err)
+	var rows []dbRow
+	if err := r.db.SelectContext(ctx, &rows, query, ids); err != nil {
+		return nil, err
 	}
 
-	results := make([]domain.ArtifactSearchResult, len(rows))
-	for i, row := range rows {
-		groupName := ""
-		if row.GroupName.Valid {
-			groupName = row.GroupName.String
-		}
+	result := make(map[string]artifactChunkRow, len(rows))
+	for _, row := range rows {
 		metaJSON := json.RawMessage("{}")
 		if len(row.Metadata) > 0 {
 			metaJSON = json.RawMessage(row.Metadata)
 		}
-
-		results[i] = domain.ArtifactSearchResult{
+		result[row.ID] = artifactChunkRow{
 			Chunk: domain.ArtifactChunk{
 				ID:             row.ID,
 				ArtifactID:     row.ArtifactID,
@@ -423,18 +542,16 @@ func (r *artifactRepository) SearchChunksVector(
 			Artifact: domain.Artifact{
 				ID:          row.ArtifactID,
 				ProjectID:   row.ProjectID,
-				GroupName:   groupName,
+				GroupName:   row.GroupName,
 				FilePath:    row.FilePath,
 				Title:       row.Title,
 				S3Key:       row.S3Key,
 				ContentHash: row.ContentHash,
 				Metadata:    metaJSON,
 			},
-			RelevanceScore: row.RelevanceScore,
 		}
 	}
-
-	return results, nil
+	return result, nil
 }
 
 func (r *artifactRepository) AddReferences(ctx context.Context, sourceArtifactID string, targetArtifactIDs []string, relationshipType string) error {

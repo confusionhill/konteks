@@ -17,7 +17,7 @@ import (
 // memoryStore is the memory persistence contract for the MCP memory service.
 type memoryStore interface {
 	Create(ctx context.Context, memory *domain.Memory) error
-	UpdateEmbedding(ctx context.Context, memoryID string, embedding []float32) error
+	UpdateEmbedding(ctx context.Context, memory domain.Memory, embedding []float32) error
 	Search(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error)
 	ListByRoom(ctx context.Context, projectID string, roomID string, limit int, offset int) ([]domain.Memory, int, error)
 	Delete(ctx context.Context, projectID string, memoryID string) error
@@ -90,9 +90,11 @@ func (s *MCPMemoryService) AddMemory(ctx context.Context, auth domain.AuthContex
 	}
 
 	err = s.embedder.Enqueue(worker.MCPMemoryEmbedTask{
-		ProjectID: auth.ProjectID,
-		MemoryID:  mem.ID,
-		Content:   content,
+		ProjectID:      auth.ProjectID,
+		MemoryID:       mem.ID,
+		RoomID:         mem.RoomID,
+		ExternalUserID: mem.ExternalUserID,
+		Content:        content,
 	})
 	if err != nil {
 		log.Printf("[MCP Memory Service Warning]: failed to queue embedding for memory %s: %v", mem.ID, err)

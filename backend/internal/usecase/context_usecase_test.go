@@ -104,7 +104,7 @@ type mockMemoryRepo struct{}
 func (m *mockMemoryRepo) Create(ctx context.Context, memory *domain.Memory) error {
 	return nil
 }
-func (m *mockMemoryRepo) SearchSemantic(ctx context.Context, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error) {
+func (m *mockMemoryRepo) SearchSemantic(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error) {
 	return nil, nil
 }
 func (m *mockMemoryRepo) ListByRoom(ctx context.Context, roomID string) ([]domain.Memory, error) {

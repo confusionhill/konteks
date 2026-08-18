@@ -3,11 +3,15 @@ package domain
 import "context"
 
 // VectorStore abstracts vector insert/search/delete operations.
-// Implementations: pgvectorStore (local dev), cloudflareVectorizeStore (production)
+// Cloudflare Vectorize is the single source of truth for embeddings.
 type VectorStore interface {
 	// UpsertMemoryVector upserts a single memory's vector embedding with metadata.
 	// The vector ID is memory.ID. Metadata includes room_id, external_user_id, project_id, status.
 	UpsertMemoryVector(ctx context.Context, memory *Memory) error
+
+	// UpdateMemoryMetadata updates the metadata of an existing memory vector.
+	// Used to keep status in sync (superseded / restored) with Postgres.
+	UpdateMemoryMetadata(ctx context.Context, memoryID string, metadata map[string]any) error
 
 	// SearchMemoryVectors performs cosine similarity search for memories.
 	// Returns matched vector IDs and cosine similarity scores (0-1, higher = more similar).
@@ -16,9 +20,6 @@ type VectorStore interface {
 
 	// DeleteMemoryVectors removes memory vectors by their IDs.
 	DeleteMemoryVectors(ctx context.Context, ids []string) error
-
-	// GetVectorByID retrieves a single vector embedding by its ID.
-	GetVectorByID(ctx context.Context, id string) ([]float32, error)
 
 	// UpsertArtifactChunkVectors upserts artifact chunk vectors in batch.
 	// Each chunk's vector ID is chunk.ID. Metadata includes project_id, artifact_id, group_name.

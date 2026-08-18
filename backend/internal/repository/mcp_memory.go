@@ -3,94 +3,159 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"sort"
+	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/jmoiron/sqlx"
 )
 
-// MCPMemoryRepository executes memory queries and pgvector searches for the
-// MCP server. Embeddings are stored directly in PostgreSQL via the vector
-// extension, mirroring the pgvector vector store implementation.
+// MCPMemoryRepository executes memory queries and Cloudflare Vectorize searches
+// for the MCP server. Embeddings are stored only in Cloudflare Vectorize; the
+// Postgres row carries the content and lifecycle metadata.
 type MCPMemoryRepository struct {
-	db *sqlx.DB
+	db          *sqlx.DB
+	vectorStore domain.VectorStore
 }
 
-func NewMCPMemoryRepository(db *sqlx.DB) *MCPMemoryRepository {
-	return &MCPMemoryRepository{db: db}
+func NewMCPMemoryRepository(db *sqlx.DB, vectorStore domain.VectorStore) *MCPMemoryRepository {
+	return &MCPMemoryRepository{db: db, vectorStore: vectorStore}
 }
 
-// Create persists a memory. The embedding may be NULL (embedding is generated
-// asynchronously by the MCP embedding worker). If embedding is provided it is
-// written directly to the vector column.
+// Create persists a memory. The embedding is generated asynchronously by the
+// MCP embedding worker and pushed to the vector store afterwards.
 func (r *MCPMemoryRepository) Create(ctx context.Context, memory *domain.Memory) error {
 	query := `
-		INSERT INTO memories (project_id, room_id, external_user_id, content, embedding, metadata)
-		VALUES ($1, $2, $3, $4, $5::vector, $6)
-		RETURNING id, created_at
+		INSERT INTO memories (project_id, room_id, external_user_id, content, metadata, status)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
 	`
-	var embeddingParam any
-	if len(memory.Embedding) > 0 {
-		embeddingParam = float32ArrayToString(memory.Embedding)
-	}
-
-	type Inserted struct {
-		ID        string `db:"id"`
-		CreatedAt string `db:"created_at"`
-	}
-	var ins Inserted
-	if err := r.db.GetContext(ctx, &ins, query,
+	var insID string
+	if err := r.db.GetContext(ctx, &insID, query,
 		memory.ProjectID,
 		memory.RoomID,
 		memory.ExternalUserID,
 		memory.Content,
-		embeddingParam,
 		memory.Metadata,
+		memory.Status,
 	); err != nil {
 		return err
 	}
-	memory.ID = ins.ID
+	memory.ID = insID
 	return nil
 }
 
-// UpdateEmbedding writes an asynchronously generated embedding onto a memory.
-func (r *MCPMemoryRepository) UpdateEmbedding(ctx context.Context, memoryID string, embedding []float32) error {
-	query := "UPDATE memories SET embedding = $2::vector WHERE id = $1"
-	_, err := r.db.ExecContext(ctx, query, memoryID, float32ArrayToString(embedding))
-	return err
+// UpdateEmbedding pushes an asynchronously generated embedding to the vector
+// store. There is no Postgres vector column anymore.
+func (r *MCPMemoryRepository) UpdateEmbedding(ctx context.Context, memory domain.Memory, embedding []float32) error {
+	if r.vectorStore == nil {
+		return nil
+	}
+	memory.Embedding = embedding
+	if errVec := r.vectorStore.UpsertMemoryVector(ctx, &memory); errVec != nil {
+		return fmt.Errorf("failed to upsert vector: %w", errVec)
+	}
+	return nil
 }
 
-// Search performs pidvector cosine similarity search scoped to the project and
-// room, blending semantic similarity with freshness. Only active memories with
-// a non-null embedding are considered.
+// Search performs Cloudflare Vectorize cosine similarity search scoped to the
+// project and room, hydrating matching rows from Postgres and blending
+// semantic similarity with freshness in Go. Only active memories are returned.
 func (r *MCPMemoryRepository) Search(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error) {
 	if len(queryEmbedding) == 0 {
 		return []domain.Memory{}, nil
 	}
-	embeddingStr := float32ArrayToString(queryEmbedding)
-	semanticWeight := 1.0 - freshnessWeight
+	if r.vectorStore == nil {
+		return []domain.Memory{}, nil
+	}
+	if limit <= 0 {
+		limit = 10
+	}
 
-	const query = `
-		SELECT id, project_id, room_id, external_user_id, content, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
-		FROM memories
-		WHERE project_id = $1 AND room_id = $2 AND status = 'active' AND embedding IS NOT NULL AND $3::vector IS NOT NULL
-		ORDER BY ($5 * (1 - (embedding <=> $3::vector)) + $6 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
-		LIMIT $4
-	`
+	matches, err := r.vectorStore.SearchMemoryVectors(ctx, projectID, roomID, externalUserID, queryEmbedding, limit*4)
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return []domain.Memory{}, nil
+	}
 
-	var rows []mcpDbMemory
-	if err := r.db.SelectContext(ctx, &rows, query, projectID, roomID, embeddingStr, limit, semanticWeight, freshnessWeight); err != nil {
+	ids := make([]string, len(matches))
+	for i, m := range matches {
+		ids[i] = m.ID
+	}
+
+	rows, err := r.getByIDs(ctx, ids)
+	if err != nil {
 		return nil, err
 	}
 
-	memories := make([]domain.Memory, len(rows))
-	for i, row := range rows {
-		memories[i] = row.toMemory()
+	semanticWeight := 1.0 - freshnessWeight
+	now := time.Now()
+
+	type scoredMemory struct {
+		mem   domain.Memory
+		score float64
+	}
+	scored := make([]scoredMemory, 0, len(matches))
+	for _, match := range matches {
+		row, ok := rows[match.ID]
+		if !ok {
+			continue
+		}
+		if row.Memory.Status != "" && row.Memory.Status != domain.MemoryStatusActive {
+			continue
+		}
+		secs := now.Sub(row.CreatedAt).Seconds()
+		if secs < 0 {
+			secs = 0
+		}
+		freshness := 1.0 / (1.0 + secs/86400.0)
+		score := semanticWeight*match.Score + freshnessWeight*freshness
+		scored = append(scored, scoredMemory{mem: row.Memory, score: score})
+	}
+
+	sort.Slice(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
+	if len(scored) > limit {
+		scored = scored[:limit]
+	}
+
+	memories := make([]domain.Memory, len(scored))
+	for i, s := range scored {
+		memories[i] = s.mem
 	}
 	return memories, nil
 }
 
+type mcpMemoryRow struct {
+	Memory    domain.Memory
+	CreatedAt time.Time
+}
+
+func (r *MCPMemoryRepository) getByIDs(ctx context.Context, ids []string) (map[string]mcpMemoryRow, error) {
+	query := `
+		SELECT id, project_id, room_id, external_user_id, content, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
+		FROM memories
+		WHERE id = ANY($1::uuid[])
+	`
+	var rows []mcpDbMemory
+	if err := r.db.SelectContext(ctx, &rows, query, ids); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]mcpMemoryRow, len(rows))
+	for _, row := range rows {
+		result[row.ID] = mcpMemoryRow{
+			Memory:    row.toMemory(),
+			CreatedAt: row.CreatedAt,
+		}
+	}
+	return result, nil
+}
+
 // ListByRoom returns all memories for a room with pagination, seeded by blank
-// (zero) scores; the pgvector score is unavailable in list mode.
+// (zero) scores; the vector score is unavailable in list mode.
 func (r *MCPMemoryRepository) ListByRoom(ctx context.Context, projectID string, roomID string, limit int, offset int) ([]domain.Memory, int, error) {
 	countQuery := `
 		SELECT COUNT(*) FROM memories WHERE project_id = $1 AND room_id = $2
@@ -119,7 +184,8 @@ func (r *MCPMemoryRepository) ListByRoom(ctx context.Context, projectID string, 
 	return memories, total, nil
 }
 
-// Delete removes a memory row, enforcing project scope.
+// Delete removes a memory row and purges its vector from the store,
+// enforcing project scope.
 func (r *MCPMemoryRepository) Delete(ctx context.Context, projectID string, memoryID string) error {
 	query := `
 		DELETE FROM memories
@@ -136,21 +202,27 @@ func (r *MCPMemoryRepository) Delete(ctx context.Context, projectID string, memo
 	if affected == 0 {
 		return sql.ErrNoRows
 	}
+
+	if r.vectorStore != nil {
+		if errVec := r.vectorStore.DeleteMemoryVectors(ctx, []string{memoryID}); errVec != nil {
+			return fmt.Errorf("failed to purge vector: %w", errVec)
+		}
+	}
 	return nil
 }
 
 type mcpDbMemory struct {
-	ID             string         `db:"id"`
-	ProjectID      string         `db:"project_id"`
-	RoomID         *string        `db:"room_id"`
-	ExternalUserID *string        `db:"external_user_id"`
-	Content        string         `db:"content"`
-	Metadata       string         `db:"metadata"`
-	CreatedAt      string         `db:"created_at"`
-	Status         string         `db:"status"`
-	SupersededByID *string        `db:"superseded_by_id"`
-	ShannonEntropy float64        `db:"shannon_entropy"`
-	IsWhitelisted  bool           `db:"is_whitelisted"`
+	ID             string    `db:"id"`
+	ProjectID      string    `db:"project_id"`
+	RoomID         *string   `db:"room_id"`
+	ExternalUserID *string   `db:"external_user_id"`
+	Content        string    `db:"content"`
+	Metadata       string    `db:"metadata"`
+	CreatedAt      time.Time `db:"created_at"`
+	Status         string    `db:"status"`
+	SupersededByID *string   `db:"superseded_by_id"`
+	ShannonEntropy float64   `db:"shannon_entropy"`
+	IsWhitelisted  bool      `db:"is_whitelisted"`
 }
 
 func (row mcpDbMemory) toMemory() domain.Memory {

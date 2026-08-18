@@ -220,8 +220,6 @@ func classifyStrategy(query string) string {
 	return "hybrid"
 }
 
-
-
 func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string, roomID string, req domain.GetContextRequest) (*domain.ContextPackage, error) {
 	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
 	if err != nil {
@@ -459,7 +457,7 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 					if room.ExternalUserID != "" {
 						extUserID = &room.ExternalUserID
 					}
-					memSearch, errSearch := u.memoryRepo.SearchSemantic(ctx, roomID, extUserID, embedding, policy.FreshnessWeight, memLimit)
+					memSearch, errSearch := u.memoryRepo.SearchSemantic(ctx, projectID, roomID, extUserID, embedding, policy.FreshnessWeight, memLimit)
 					if errSearch != nil {
 						log.Printf("[Context Memory Search Error]: %v", errSearch)
 					} else {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/config"
@@ -137,21 +138,78 @@ func (s *cloudflareVectorizeStore) UpsertMemoryVector(ctx context.Context, memor
 	return err
 }
 
-func (s *cloudflareVectorizeStore) SearchMemoryVectors(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, limit int) ([]domain.VectorMatch, error) {
-	filter := map[string]any{
-		"project_id": projectID,
-		"status":     "active",
+// UpdateMemoryMetadata updates the stored metadata for a single memory vector.
+// The v2 API has no metadata-only endpoint, so we fetch the existing vector
+// (which includes its values) and re-upsert it with the merged metadata.
+func (s *cloudflareVectorizeStore) UpdateMemoryMetadata(ctx context.Context, memoryID string, metadata map[string]any) error {
+	getURL := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/vectorize/v2/indexes/%s/get_by_ids", s.accountID, s.memoryIndex)
+	resBytes, err := s.doRequest(ctx, http.MethodPost, getURL, map[string]any{"ids": []string{memoryID}})
+	if err != nil {
+		return err
 	}
 
-	if externalUserID != nil && *externalUserID != "" {
-		filter["$or"] = []map[string]any{
-			{"room_id": roomID},
-			{"external_user_id": *externalUserID},
-		}
-	} else {
-		filter["room_id"] = roomID
+	var existing []cfVector
+	if err := json.Unmarshal(resBytes, &existing); err != nil {
+		return err
+	}
+	if len(existing) == 0 {
+		return fmt.Errorf("vector not found for memory %s", memoryID)
 	}
 
+	vec := existing[0]
+	if len(vec.Values) == 0 {
+		return fmt.Errorf("vector %s has no values to upsert", memoryID)
+	}
+
+	merged := make(map[string]any, len(vec.Metadata)+len(metadata))
+	for k, v := range vec.Metadata {
+		merged[k] = v
+	}
+	for k, v := range metadata {
+		merged[k] = v
+	}
+	vec.Metadata = merged
+
+	line, err := json.Marshal(vec)
+	if err != nil {
+		return err
+	}
+	ndjson := append(line, '\n')
+
+	upsertURL := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/vectorize/v2/indexes/%s/upsert", s.accountID, s.memoryIndex)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, upsertURL, bytes.NewReader(ndjson))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+s.apiToken)
+	req.Header.Set("Content-Type", "application/x-ndjson")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("cloudflare vectorize upsert error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var cfResp cfResponse
+	if err := json.Unmarshal(respBody, &cfResp); err != nil {
+		return err
+	}
+	if !cfResp.Success {
+		return fmt.Errorf("cloudflare vectorize upsert returned failure: %s", string(respBody))
+	}
+	return nil
+}
+
+func (s *cloudflareVectorizeStore) queryMemoryIndex(ctx context.Context, queryEmbedding []float32, limit int, filter map[string]any) ([]domain.VectorMatch, error) {
 	reqBody := cfQueryRequest{
 		Vector: queryEmbedding,
 		TopK:   limit,
@@ -184,6 +242,71 @@ func (s *cloudflareVectorizeStore) SearchMemoryVectors(ctx context.Context, proj
 	return matches, nil
 }
 
+// SearchMemoryVectors finds the nearest memory vectors for the query embedding.
+// The metadata filter narrows results to the given project, and (when known) to
+// the room plus any memories belonging to the external user. Cloudflare
+// Vectorize only supports AND-style filters, so OR semantics are implemented by
+// running one query per clause and merging the best match per vector ID.
+func (s *cloudflareVectorizeStore) SearchMemoryVectors(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, limit int) ([]domain.VectorMatch, error) {
+	base := map[string]any{
+		"project_id": projectID,
+		"status":     "active",
+	}
+
+	copyMap := func(m map[string]any, extraKey string, extraVal string) map[string]any {
+		c := make(map[string]any, len(m)+1)
+		for k, v := range m {
+			c[k] = v
+		}
+		c[extraKey] = extraVal
+		return c
+	}
+
+	roomFilter := copyMap(base, "room_id", roomID)
+
+	allMatches := []domain.VectorMatch{}
+	byID := map[string]float64{}
+
+	appendMatches := func(matches []domain.VectorMatch) {
+		for _, m := range matches {
+			if score, ok := byID[m.ID]; ok {
+				if m.Score > score {
+					byID[m.ID] = m.Score
+				}
+				continue
+			}
+			byID[m.ID] = m.Score
+			allMatches = append(allMatches, m)
+		}
+	}
+
+	roomMatches, err := s.queryMemoryIndex(ctx, queryEmbedding, limit, roomFilter)
+	if err != nil {
+		return nil, fmt.Errorf("room memory query: %w", err)
+	}
+	appendMatches(roomMatches)
+
+	if externalUserID != nil && *externalUserID != "" {
+		userFilter := copyMap(base, "external_user_id", *externalUserID)
+
+		userMatches, err := s.queryMemoryIndex(ctx, queryEmbedding, limit, userFilter)
+		if err != nil {
+			return nil, fmt.Errorf("user memory query: %w", err)
+		}
+		appendMatches(userMatches)
+	}
+
+	sort.Slice(allMatches, func(i, j int) bool {
+		return allMatches[i].Score > allMatches[j].Score
+	})
+
+	if len(allMatches) > limit {
+		allMatches = allMatches[:limit]
+	}
+
+	return allMatches, nil
+}
+
 type cfDeleteRequest struct {
 	IDs []string `json:"ids"`
 }
@@ -195,25 +318,6 @@ func (s *cloudflareVectorizeStore) DeleteMemoryVectors(ctx context.Context, ids 
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/vectorize/v2/indexes/%s/delete_by_ids", s.accountID, s.memoryIndex)
 	_, err := s.doRequest(ctx, http.MethodPost, url, cfDeleteRequest{IDs: ids})
 	return err
-}
-
-func (s *cloudflareVectorizeStore) GetVectorByID(ctx context.Context, id string) ([]float32, error) {
-	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/vectorize/v2/indexes/%s/get_by_ids", s.accountID, s.memoryIndex)
-	resBytes, err := s.doRequest(ctx, http.MethodPost, url, cfDeleteRequest{IDs: []string{id}})
-	if err != nil {
-		return nil, err
-	}
-
-	var vecs []cfVector
-	if err := json.Unmarshal(resBytes, &vecs); err != nil {
-		return nil, err
-	}
-
-	if len(vecs) == 0 {
-		return nil, fmt.Errorf("vector id %s not found in cloudflare vectorize", id)
-	}
-
-	return vecs[0].Values, nil
 }
 
 func (s *cloudflareVectorizeStore) UpsertArtifactChunkVectors(ctx context.Context, chunks []domain.ArtifactChunk, groupName string) error {

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/config"
-	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/dika/contextkit/backend/internal/repository"
 	"github.com/dika/contextkit/backend/internal/service"
 	"github.com/dika/contextkit/backend/internal/worker"
@@ -38,12 +37,8 @@ func main() {
 	defer db.Close()
 
 	// 3. Initialize Vector Store & Storage Service
-	var vectorStore domain.VectorStore
-	if cfg.VectorProvider == "cloudflare" {
-		vectorStore = repository.NewCloudflareVectorizeStore(cfg)
-	} else {
-		vectorStore = repository.NewPgvectorStore(db)
-	}
+	// Cloudflare Vectorize is the only vector store; Postgres holds no embeddings.
+	vectorStore := repository.NewCloudflareVectorizeStore(cfg)
 
 	storageProvider, err := service.NewS3StorageProvider(cfg)
 	if err != nil {

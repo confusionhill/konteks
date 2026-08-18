@@ -3,12 +3,19 @@ package repository
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/jmoiron/sqlx"
 )
+
+// memorySearchOverfetch is the factor by which we pull extra candidates from
+// the vector store so a freshness re-rank in Go keeps enough results after
+// superseded/stale memories are filtered out.
+const memorySearchOverfetch = 4
 
 type memoryRepository struct {
 	db          *sqlx.DB
@@ -59,23 +66,21 @@ func stringToFloat32Array(s string) ([]float32, error) {
 
 func (r *memoryRepository) Create(ctx context.Context, memory *domain.Memory) error {
 	query := `
-		INSERT INTO memories (project_id, room_id, external_user_id, content, embedding, metadata)
-		VALUES ($1, $2, $3, $4, $5::vector, $6)
+		INSERT INTO memories (project_id, room_id, external_user_id, content, metadata, status)
+		VALUES ($1, $2, $3, $4, $5, 'active')
 		RETURNING id, created_at
 	`
-	embeddingStr := float32ArrayToString(memory.Embedding)
-	
+
 	type Inserted struct {
 		ID        string `db:"id"`
 		CreatedAt string `db:"created_at"`
 	}
 	var ins Inserted
-	err := r.db.GetContext(ctx, &ins, query, 
-		memory.ProjectID, 
-		memory.RoomID, 
-		memory.ExternalUserID, 
-		memory.Content, 
-		embeddingStr, 
+	err := r.db.GetContext(ctx, &ins, query,
+		memory.ProjectID,
+		memory.RoomID,
+		memory.ExternalUserID,
+		memory.Content,
 		memory.Metadata,
 	)
 	if err != nil {
@@ -93,77 +98,128 @@ func (r *memoryRepository) Create(ctx context.Context, memory *domain.Memory) er
 	return nil
 }
 
-func (r *memoryRepository) SearchSemantic(ctx context.Context, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error) {
-	embeddingStr := float32ArrayToString(queryEmbedding)
-	semanticWeight := 1.0 - freshnessWeight
-
-	var query string
-	var args []any
-
-	if externalUserID != nil && *externalUserID != "" {
-		query = `
-			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
-			FROM memories
-			WHERE (room_id = $1 OR external_user_id = $2) AND status = 'active'
-			ORDER BY ($4 * (1 - (embedding <=> $3::vector)) + $5 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
-			LIMIT $6
-		`
-		args = []any{roomID, *externalUserID, embeddingStr, semanticWeight, freshnessWeight, limit}
-	} else {
-		query = `
-			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
-			FROM memories
-			WHERE room_id = $1 AND status = 'active'
-			ORDER BY ($3 * (1 - (embedding <=> $2::vector)) + $4 * (1.0 / (1 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400))) DESC
-			LIMIT $5
-		`
-		args = []any{roomID, embeddingStr, semanticWeight, freshnessWeight, limit}
+func (r *memoryRepository) SearchSemantic(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]domain.Memory, error) {
+	if len(queryEmbedding) == 0 {
+		return []domain.Memory{}, nil
+	}
+	if r.vectorStore == nil {
+		return nil, fmt.Errorf("vector store not configured")
 	}
 
-	type dbMemory struct {
-		ID             string  `db:"id"`
-		ProjectID      string  `db:"project_id"`
-		RoomID         *string `db:"room_id"`
-		ExternalUserID *string `db:"external_user_id"`
-		Content        string  `db:"content"`
-		EmbeddingText  string  `db:"embedding"`
-		Metadata       string  `db:"metadata"`
-		CreatedAt      string  `db:"created_at"`
-		Status         string  `db:"status"`
-		SupersededByID *string `db:"superseded_by_id"`
-		ShannonEntropy float64 `db:"shannon_entropy"`
-		IsWhitelisted  bool    `db:"is_whitelisted"`
+	if limit <= 0 {
+		limit = 5
 	}
 
-	var rows []dbMemory
-	err := r.db.SelectContext(ctx, &rows, query, args...)
+	matches, err := r.vectorStore.SearchMemoryVectors(ctx, projectID, roomID, externalUserID, queryEmbedding, limit*memorySearchOverfetch)
+	if err != nil {
+		return nil, fmt.Errorf("vector search failed: %w", err)
+	}
+	if len(matches) == 0 {
+		return []domain.Memory{}, nil
+	}
+
+	ids := make([]string, len(matches))
+	for i, m := range matches {
+		ids[i] = m.ID
+	}
+
+	rows, err := r.getByIDs(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 
-	memories := make([]domain.Memory, len(rows))
-	for i, row := range rows {
-		emb, err := stringToFloat32Array(row.EmbeddingText)
-		if err != nil {
-			return nil, err
+	semanticWeight := 1.0 - freshnessWeight
+	now := time.Now()
+
+	type scoredMemory struct {
+		mem   domain.Memory
+		score float64
+	}
+	scored := make([]scoredMemory, 0, len(matches))
+	for _, match := range matches {
+		row, ok := rows[match.ID]
+		if !ok {
+			continue
 		}
-		memories[i] = domain.Memory{
-			ID:             row.ID,
-			ProjectID:      row.ProjectID,
-			RoomID:         row.RoomID,
-			ExternalUserID: row.ExternalUserID,
-			Content:        row.Content,
-			Embedding:      emb,
-			Metadata:       row.Metadata,
+		if row.Memory.Status != "" && row.Memory.Status != domain.MemoryStatusActive {
+			continue
 		}
+		createdAt := row.CreatedAt
+		secs := now.Sub(createdAt).Seconds()
+		if secs < 0 {
+			secs = 0
+		}
+		freshness := 1.0 / (1.0 + secs/86400.0)
+		score := semanticWeight*match.Score + freshnessWeight*freshness
+		scored = append(scored, scoredMemory{mem: row.Memory, score: score})
 	}
 
+	sort.Slice(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
+	if len(scored) > limit {
+		scored = scored[:limit]
+	}
+
+	memories := make([]domain.Memory, len(scored))
+	for i, s := range scored {
+		memories[i] = s.mem
+	}
 	return memories, nil
+}
+
+type memoryRow struct {
+	Memory    domain.Memory
+	CreatedAt time.Time
+}
+
+func (r *memoryRepository) getByIDs(ctx context.Context, ids []string) (map[string]memoryRow, error) {
+	type dbMemory struct {
+		ID             string    `db:"id"`
+		ProjectID      string    `db:"project_id"`
+		RoomID         *string   `db:"room_id"`
+		ExternalUserID *string   `db:"external_user_id"`
+		Content        string    `db:"content"`
+		Metadata       string    `db:"metadata"`
+		CreatedAt      time.Time `db:"created_at"`
+		Status         string    `db:"status"`
+		SupersededByID *string   `db:"superseded_by_id"`
+		ShannonEntropy float64   `db:"shannon_entropy"`
+		IsWhitelisted  bool      `db:"is_whitelisted"`
+	}
+
+	query := `
+		SELECT id, project_id, room_id, external_user_id, content, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
+		FROM memories
+		WHERE id = ANY($1::uuid[])
+	`
+	var rows []dbMemory
+	if err := r.db.SelectContext(ctx, &rows, query, ids); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]memoryRow, len(rows))
+	for _, row := range rows {
+		result[row.ID] = memoryRow{
+			Memory: domain.Memory{
+				ID:             row.ID,
+				ProjectID:      row.ProjectID,
+				RoomID:         row.RoomID,
+				ExternalUserID: row.ExternalUserID,
+				Content:        row.Content,
+				Metadata:       row.Metadata,
+				Status:         row.Status,
+				SupersededByID: row.SupersededByID,
+				ShannonEntropy: row.ShannonEntropy,
+				IsWhitelisted:  row.IsWhitelisted,
+			},
+			CreatedAt: row.CreatedAt,
+		}
+	}
+	return result, nil
 }
 
 func (r *memoryRepository) ListByRoom(ctx context.Context, roomID string) ([]domain.Memory, error) {
 	query := `
-		SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at
+		SELECT id, project_id, room_id, external_user_id, content, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
 		FROM memories
 		WHERE room_id = $1
 	`
@@ -173,9 +229,12 @@ func (r *memoryRepository) ListByRoom(ctx context.Context, roomID string) ([]dom
 		RoomID         *string `db:"room_id"`
 		ExternalUserID *string `db:"external_user_id"`
 		Content        string  `db:"content"`
-		EmbeddingText  string  `db:"embedding"`
 		Metadata       string  `db:"metadata"`
 		CreatedAt      string  `db:"created_at"`
+		Status         string  `db:"status"`
+		SupersededByID *string `db:"superseded_by_id"`
+		ShannonEntropy float64 `db:"shannon_entropy"`
+		IsWhitelisted  bool    `db:"is_whitelisted"`
 	}
 
 	var rows []dbMemory
@@ -186,18 +245,17 @@ func (r *memoryRepository) ListByRoom(ctx context.Context, roomID string) ([]dom
 
 	memories := make([]domain.Memory, len(rows))
 	for i, row := range rows {
-		emb, err := stringToFloat32Array(row.EmbeddingText)
-		if err != nil {
-			return nil, err
-		}
 		memories[i] = domain.Memory{
 			ID:             row.ID,
 			ProjectID:      row.ProjectID,
 			RoomID:         row.RoomID,
 			ExternalUserID: row.ExternalUserID,
 			Content:        row.Content,
-			Embedding:      emb,
 			Metadata:       row.Metadata,
+			Status:         row.Status,
+			SupersededByID: row.SupersededByID,
+			ShannonEntropy: row.ShannonEntropy,
+			IsWhitelisted:  row.IsWhitelisted,
 		}
 	}
 

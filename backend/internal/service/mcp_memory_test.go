@@ -25,8 +25,8 @@ func (s *stubMemoryStoreAll) Create(ctx context.Context, memory *domain.Memory) 
 	return nil
 }
 
-func (s *stubMemoryStoreAll) UpdateEmbedding(ctx context.Context, memoryID string, embedding []float32) error {
-	s.embeddingUp = append(s.embeddingUp, memoryID)
+func (s *stubMemoryStoreAll) UpdateEmbedding(ctx context.Context, memory domain.Memory, embedding []float32) error {
+	s.embeddingUp = append(s.embeddingUp, memory.ID)
 	return nil
 }
 

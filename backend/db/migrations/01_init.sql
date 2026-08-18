@@ -192,12 +192,12 @@ VALUES (
 ) ON CONFLICT (project_id, user_id) DO NOTHING;
 
 -- Seed Initial API Key for Demo Project (raw key: ck_live_dev_test_key_123)
--- SHA-256 hash for "ck_live_dev_test_key_123": 2ec2b322a33f5d5e236561f7e025176c1dfb194d33458ef1df1a545300d8b4e7
+-- SHA-256 hash for "ck_live_dev_test_key_123": 6f7eea6cec35b392990580b1c2abb43ea829c056f1495c0202b3b57ed2b2f3a9
 INSERT INTO api_keys (id, project_id, key_hash, key_prefix, name)
 VALUES (
     'c0000000-0000-0000-0000-000000000001',
     'b0000000-0000-0000-0000-000000000001',
-    '2ec2b322a33f5d5e236561f7e025176c1dfb194d33458ef1df1a545300d8b4e7',
+    '6f7eea6cec35b392990580b1c2abb43ea829c056f1495c0202b3b57ed2b2f3a9',
     'ck_live_dev...',
     'Development Test Key'
 ) ON CONFLICT (id) DO NOTHING;

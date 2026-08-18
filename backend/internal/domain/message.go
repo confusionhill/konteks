@@ -56,7 +56,7 @@ type MessageRepository interface {
 
 type MemoryRepository interface {
 	Create(ctx context.Context, memory *Memory) error
-	SearchSemantic(ctx context.Context, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]Memory, error)
+	SearchSemantic(ctx context.Context, projectID string, roomID string, externalUserID *string, queryEmbedding []float32, freshnessWeight float64, limit int) ([]Memory, error)
 	ListByRoom(ctx context.Context, roomID string) ([]Memory, error)
 }
 

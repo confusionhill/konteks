@@ -32,6 +32,14 @@ type Artifact struct {
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
+// ChunkVectorStatusPending means the chunk's embedding failed to generate and
+// has been scheduled for a background retry.
+const ChunkVectorStatusPending = "pending"
+
+// ChunkVectorStatusIndexed means the chunk's embedding has been successfully
+// pushed to the vector store.
+const ChunkVectorStatusIndexed = "indexed"
+
 type ArtifactChunk struct {
 	ID             string    `json:"id"`
 	ArtifactID     string    `json:"artifact_id"`
@@ -40,6 +48,7 @@ type ArtifactChunk struct {
 	SectionHeading string    `json:"section_heading"`
 	Content        string    `json:"content"`
 	Embedding      []float32 `json:"embedding,omitempty"`
+	VectorStatus   string    `json:"vector_status,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -137,6 +146,9 @@ type ArtifactRepository interface {
 	CreateChunks(ctx context.Context, chunks []ArtifactChunk) error
 	DeleteChunksByArtifact(ctx context.Context, artifactID string) error
 	SearchChunksVector(ctx context.Context, projectID string, queryEmbedding []float32, limit int, excludedArtifactIDs []string, excludedGroupNames []string) ([]ArtifactSearchResult, error)
+	ListPendingChunks(ctx context.Context, limit int) ([]ArtifactChunk, error)
+	UpsertChunkVectors(ctx context.Context, chunks []ArtifactChunk, groupName string) error
+	MarkChunksIndexed(ctx context.Context, chunkIDs []string) error
 
 	AddReferences(ctx context.Context, sourceArtifactID string, targetArtifactIDs []string, relationshipType string) error
 	GetOutgoingReferences(ctx context.Context, sourceArtifactID string) ([]ArtifactReference, error)
@@ -161,4 +173,5 @@ type ArtifactUsecase interface {
 	GetRoomBlacklists(ctx context.Context, projectID string, roomID string) ([]RoomArtifactBlacklist, error)
 
 	RetrieveArtifactContext(ctx context.Context, projectID string, roomID string, query string, policy ContextPolicy) ([]ArtifactContext, error)
+	RetryPendingEmbeds(ctx context.Context, limit int) (int, error)
 }

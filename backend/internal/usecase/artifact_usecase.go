@@ -313,46 +313,95 @@ func (u *artifactUsecase) asyncGenerateEmbeddingsAndSave(projectID string, artif
 	defer cancel()
 
 	var dbChunks []domain.ArtifactChunk
-	targetDim := 0
+	embedded := 0
 
 	for i, c := range chunks {
-		var emb []float32
-		if u.openRouterClient != nil {
-			chunkCtx, chunkCancel := context.WithTimeout(bgCtx, 30*time.Second)
-			e, err := u.openRouterClient.GenerateEmbedding(chunkCtx, c.SectionHeading+"\n"+c.Content)
-			chunkCancel()
-			if err != nil {
-				log.Printf("[Artifact Async Embedding Warning]: chunk %d embedding call failed: %v", i, err)
-			} else {
-				emb = e
-			}
-		}
-		if len(emb) > 0 {
-			targetDim = len(emb)
-		} else if targetDim == 0 {
-			targetDim = 4096
-		}
-
-		if len(emb) == 0 || len(emb) != targetDim {
-			emb = make([]float32, targetDim)
-		}
-
-		dbChunks = append(dbChunks, domain.ArtifactChunk{
+		chunk := domain.ArtifactChunk{
 			ID:             uuid.NewString(),
 			ArtifactID:     artifactID,
 			ProjectID:      projectID,
 			ChunkIndex:     i,
 			SectionHeading: c.SectionHeading,
 			Content:        c.Content,
-			Embedding:      emb,
-		})
+			VectorStatus:   domain.ChunkVectorStatusPending,
+		}
+
+		if u.openRouterClient != nil {
+			chunkCtx, chunkCancel := context.WithTimeout(bgCtx, 30*time.Second)
+			e, err := u.openRouterClient.GenerateEmbedding(chunkCtx, c.SectionHeading+"\n"+c.Content)
+			chunkCancel()
+			if err != nil {
+				log.Printf("[Artifact Async Embedding Warning]: chunk %d embedding call failed: %v", i, err)
+			} else if len(e) == 0 {
+				log.Printf("[Artifact Async Embedding Warning]: chunk %d produced an empty embedding", i)
+			} else {
+				chunk.Embedding = e
+				chunk.VectorStatus = domain.ChunkVectorStatusIndexed
+				embedded++
+			}
+		} else {
+			log.Printf("[Artifact Async Embedding Warning]: no embedding client configured; chunk %d left pending", i)
+		}
+
+		dbChunks = append(dbChunks, chunk)
 	}
 
 	if err := u.artifactRepo.CreateChunks(bgCtx, dbChunks); err != nil {
 		log.Printf("[Artifact Async Save Error]: failed saving chunks for artifact %s: %v", artifactID, err)
 	} else {
-		log.Printf("[Artifact Async Success]: indexed %d chunks for artifact %s (dim=%d)", len(dbChunks), artifactID, targetDim)
+		log.Printf("[Artifact Async Success]: indexed %d/%d chunks for artifact %s", embedded, len(dbChunks), artifactID)
 	}
+}
+
+// RetryPendingEmbeds re-generates embeddings for chunks whose earlier attempt
+// failed, pushes successful vectors to the store, and marks them indexed.
+func (u *artifactUsecase) RetryPendingEmbeds(ctx context.Context, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	pending, err := u.artifactRepo.ListPendingChunks(ctx, limit)
+	if err != nil {
+		return 0, err
+	}
+	if len(pending) == 0 {
+		return 0, nil
+	}
+
+	var upserted []domain.ArtifactChunk
+	for i := range pending {
+		chunkCtx, chunkCancel := context.WithTimeout(ctx, 30*time.Second)
+		emb, errEmb := u.openRouterClient.GenerateEmbedding(chunkCtx, pending[i].SectionHeading+"\n"+pending[i].Content)
+		chunkCancel()
+		if errEmb != nil {
+			log.Printf("[Artifact Retry Pending]: chunk %s still failing to embed: %v", pending[i].ID, errEmb)
+			continue
+		}
+		if len(emb) == 0 {
+			log.Printf("[Artifact Retry Pending]: chunk %s produced empty embedding", pending[i].ID)
+			continue
+		}
+		pending[i].Embedding = emb
+		upserted = append(upserted, pending[i])
+	}
+
+	if len(upserted) == 0 {
+		return 0, nil
+	}
+
+	if errVec := u.artifactRepo.UpsertChunkVectors(ctx, upserted, ""); errVec != nil {
+		return 0, errVec
+	}
+
+	ids := make([]string, len(upserted))
+	for i, c := range upserted {
+		ids[i] = c.ID
+	}
+	if errMark := u.artifactRepo.MarkChunksIndexed(ctx, ids); errMark != nil {
+		return 0, errMark
+	}
+
+	log.Printf("[Artifact Retry Pending]: re-embedded %d chunks", len(upserted))
+	return len(upserted), nil
 }
 
 func (u *artifactUsecase) UpdateArtifact(ctx context.Context, projectID string, artifactID string, req domain.UpdateArtifactRequest) (*domain.Artifact, error) {
@@ -454,6 +503,8 @@ func (u *artifactUsecase) GetRoomBlacklists(ctx context.Context, projectID strin
 	return u.artifactRepo.GetRoomBlacklists(ctx, roomID)
 }
 
+const defaultMinArtifactRelevance = 0.5
+
 var heuristicDocKeywords = []string{
 	"how to", "spec", "documentation", ".md", "docs/", "setup", "config", "architecture", "policy", "schema", "rules",
 }
@@ -511,7 +562,7 @@ func (u *artifactUsecase) RetrieveArtifactContext(ctx context.Context, projectID
 		}
 	}
 	if len(queryEmbedding) == 0 {
-		queryEmbedding = make([]float32, 4096)
+		return nil, nil
 	}
 
 	limit := 3
@@ -526,6 +577,15 @@ func (u *artifactUsecase) RetrieveArtifactContext(ctx context.Context, projectID
 		return nil, nil
 	}
 
+	minScore := policy.MinRelevanceScore
+	if minScore <= 0 {
+		minScore = defaultMinArtifactRelevance
+	}
+	if len(searchResults) > 0 && searchResults[0].RelevanceScore < minScore {
+		log.Printf("[Artifact Relevance Gating]: Top relevance %.2f < %.2f floor. Skipping artifacts.", searchResults[0].RelevanceScore, minScore)
+		return nil, nil
+	}
+
 	tokenBudget := policy.MaxArtifactTokens
 	if tokenBudget <= 0 {
 		tokenBudget = 1000
@@ -535,7 +595,7 @@ func (u *artifactUsecase) RetrieveArtifactContext(ctx context.Context, projectID
 	visitedIDs := make(map[string]bool)
 
 	for _, res := range searchResults {
-		if visitedIDs[res.Artifact.ID] {
+		if visitedIDs[res.Artifact.ID] || res.RelevanceScore < minScore {
 			continue
 		}
 		visitedIDs[res.Artifact.ID] = true

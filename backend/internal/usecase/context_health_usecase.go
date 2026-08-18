@@ -14,17 +14,20 @@ type contextHealthUsecase struct {
 	healthRepo       domain.ContextHealthRepository
 	roomRepo         domain.RoomRepository
 	openRouterClient domain.OpenRouterServiceClient
+	vectorStore      domain.VectorStore
 }
 
 func NewContextHealthUsecase(
 	healthRepo domain.ContextHealthRepository,
 	roomRepo domain.RoomRepository,
 	openRouterClient domain.OpenRouterServiceClient,
+	vectorStore domain.VectorStore,
 ) domain.ContextHealthUsecase {
 	return &contextHealthUsecase{
 		healthRepo:       healthRepo,
 		roomRepo:         roomRepo,
 		openRouterClient: openRouterClient,
+		vectorStore:      vectorStore,
 	}
 }
 
@@ -102,6 +105,15 @@ func (u *contextHealthUsecase) ProcessMicroSweep(ctx context.Context, projectID 
 			
 			errUpdate := u.healthRepo.UpdateMemoryStatus(ctx, olderMem.ID, domain.MemoryStatusSuperseded, &latestMem.ID)
 			if errUpdate == nil {
+				if u.vectorStore != nil {
+					if errMeta := u.vectorStore.UpdateMemoryMetadata(ctx, olderMem.ID, map[string]any{
+						"status":           domain.MemoryStatusSuperseded,
+						"superseded_by_id": latestMem.ID,
+					}); errMeta != nil {
+						log.Printf("[ContextHealth Sweep]: failed to sync metadata for memory %s: %v", olderMem.ID, errMeta)
+					}
+				}
+
 				prevJSON, _ := json.Marshal(olderMem)
 				newJSON, _ := json.Marshal(map[string]interface{}{
 					"status":           domain.MemoryStatusSuperseded,
@@ -145,6 +157,14 @@ func (u *contextHealthUsecase) RestoreMemory(ctx context.Context, projectID stri
 	errRestore := u.healthRepo.RestoreMemory(ctx, memoryID)
 	if errRestore != nil {
 		return errRestore
+	}
+
+	if u.vectorStore != nil {
+		if errMeta := u.vectorStore.UpdateMemoryMetadata(ctx, memoryID, map[string]any{
+			"status": domain.MemoryStatusActive,
+		}); errMeta != nil {
+			log.Printf("[ContextHealth Restore]: failed to sync metadata for memory %s: %v", memoryID, errMeta)
+		}
 	}
 
 	roomID := ""

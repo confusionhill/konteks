@@ -75,7 +75,10 @@ func main() {
 	roomRepo := repository.NewMCPRoomRepository(db)
 	stateRepo := repository.NewMCPStateRepository(db)
 	messageRepo := repository.NewMCPMessageRepository(db)
-	memoryRepo := repository.NewMCPMemoryRepository(db)
+
+	// Cloudflare Vectorize is the only vector store; Postgres holds no embeddings.
+	vectorStore := repository.NewCloudflareVectorizeStore(cfg)
+	memoryRepo := repository.NewMCPMemoryRepository(db, vectorStore)
 
 	openRouterClient := service.NewOpenRouterServiceClient(cfg)
 	embeddingWorker := worker.NewMCPEmbeddingWorker(openRouterClient, memoryRepo, 5000)

@@ -15,13 +15,13 @@ type stubMemoryUpdater struct {
 	err  error
 }
 
-func (s *stubMemoryUpdater) UpdateEmbedding(ctx context.Context, memoryID string, embedding []float32) error {
+func (s *stubMemoryUpdater) UpdateEmbedding(ctx context.Context, memory domain.Memory, embedding []float32) error {
 	if s.err != nil {
 		return s.err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.ids = append(s.ids, memoryID)
+	s.ids = append(s.ids, memory.ID)
 	return nil
 }
 

@@ -76,7 +76,7 @@ func (m *mockHealthRepo) GetMemoryByID(ctx context.Context, memoryID string) (*d
 
 func TestSanitizeIngressMemory(t *testing.T) {
 	healthRepo := newMockHealthRepo()
-	usecase := NewContextHealthUsecase(healthRepo, nil, nil)
+	usecase := NewContextHealthUsecase(healthRepo, nil, nil, nil)
 
 	// Whitelisted content (code block)
 	codeContent := "```go\nfunc main() {}\n```"
@@ -109,7 +109,7 @@ func TestRestoreMemory(t *testing.T) {
 		Status:    domain.MemoryStatusSuperseded,
 	}
 
-	usecase := NewContextHealthUsecase(healthRepo, nil, nil)
+	usecase := NewContextHealthUsecase(healthRepo, nil, nil, nil)
 
 	err := usecase.RestoreMemory(context.Background(), projectID, memID)
 	if err != nil {

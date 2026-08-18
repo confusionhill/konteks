@@ -114,14 +114,14 @@ func (r *contextHealthRepository) ListMemoriesByRoom(ctx context.Context, roomID
 	var query string
 	if includeSuperseded {
 		query = `
-			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
+			SELECT id, project_id, room_id, external_user_id, content, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
 			FROM memories
 			WHERE room_id = $1
 			ORDER BY created_at DESC
 		`
 	} else {
 		query = `
-			SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
+			SELECT id, project_id, room_id, external_user_id, content, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
 			FROM memories
 			WHERE room_id = $1 AND status = 'active'
 			ORDER BY created_at DESC
@@ -134,7 +134,6 @@ func (r *contextHealthRepository) ListMemoriesByRoom(ctx context.Context, roomID
 		RoomID         *string `db:"room_id"`
 		ExternalUserID *string `db:"external_user_id"`
 		Content        string  `db:"content"`
-		EmbeddingText  string  `db:"embedding"`
 		Metadata       string  `db:"metadata"`
 		CreatedAt      string  `db:"created_at"`
 		Status         string  `db:"status"`
@@ -151,14 +150,12 @@ func (r *contextHealthRepository) ListMemoriesByRoom(ctx context.Context, roomID
 
 	memories := make([]domain.Memory, len(rows))
 	for i, row := range rows {
-		emb, _ := stringToFloat32Array(row.EmbeddingText)
 		memories[i] = domain.Memory{
 			ID:             row.ID,
 			ProjectID:      row.ProjectID,
 			RoomID:         row.RoomID,
 			ExternalUserID: row.ExternalUserID,
 			Content:        row.Content,
-			Embedding:      emb,
 			Metadata:       row.Metadata,
 			Status:         row.Status,
 			SupersededByID: row.SupersededByID,
@@ -191,7 +188,7 @@ func (r *contextHealthRepository) RestoreMemory(ctx context.Context, memoryID st
 
 func (r *contextHealthRepository) GetMemoryByID(ctx context.Context, memoryID string) (*domain.Memory, error) {
 	query := `
-		SELECT id, project_id, room_id, external_user_id, content, embedding::text, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
+		SELECT id, project_id, room_id, external_user_id, content, metadata, created_at, status, superseded_by_id, shannon_entropy, is_whitelisted
 		FROM memories
 		WHERE id = $1
 	`
@@ -201,7 +198,6 @@ func (r *contextHealthRepository) GetMemoryByID(ctx context.Context, memoryID st
 		RoomID         *string `db:"room_id"`
 		ExternalUserID *string `db:"external_user_id"`
 		Content        string  `db:"content"`
-		EmbeddingText  string  `db:"embedding"`
 		Metadata       string  `db:"metadata"`
 		CreatedAt      string  `db:"created_at"`
 		Status         string  `db:"status"`
@@ -216,14 +212,12 @@ func (r *contextHealthRepository) GetMemoryByID(ctx context.Context, memoryID st
 		return nil, fmt.Errorf("memory not found: %w", err)
 	}
 
-	emb, _ := stringToFloat32Array(row.EmbeddingText)
 	return &domain.Memory{
 		ID:             row.ID,
 		ProjectID:      row.ProjectID,
 		RoomID:         row.RoomID,
 		ExternalUserID: row.ExternalUserID,
 		Content:        row.Content,
-		Embedding:      emb,
 		Metadata:       row.Metadata,
 		Status:         row.Status,
 		SupersededByID: row.SupersededByID,

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/dika/contextkit/backend/internal/config"
-	"github.com/dika/contextkit/backend/internal/domain"
 	"github.com/dika/contextkit/backend/internal/handler"
 	"github.com/dika/contextkit/backend/internal/repository"
 	"github.com/dika/contextkit/backend/internal/service"
@@ -66,6 +65,8 @@ func main() {
 		"db/migrations/05_add_artifacts.sql",
 		"db/migrations/07_add_context_health_settings.sql",
 		"db/migrations/08_optional_embedding.sql",
+		"db/migrations/09_drop_vector_columns.sql",
+		"db/migrations/10_artifact_chunk_vector_status.sql",
 	}
 	for _, migrationFile := range migrationFiles {
 		log.Printf("applying database migrations from %s...", migrationFile)
@@ -76,15 +77,10 @@ func main() {
 		}
 	}
 
-	// 4. Initialize Services, Clients & Vector Store
-	var vectorStore domain.VectorStore
-	if cfg.VectorProvider == "cloudflare" {
-		vectorStore = repository.NewCloudflareVectorizeStore(cfg)
-		log.Println("[VectorStore]: Initialized Cloudflare Vectorize provider.")
-	} else {
-		vectorStore = repository.NewPgvectorStore(db)
-		log.Println("[VectorStore]: Initialized pgvector provider.")
-	}
+	// 4. Initialize Services, Clients & Vector Store (Cloudflare Vectorize is the
+	// only vector store; Postgres holds no embeddings).
+	vectorStore := repository.NewCloudflareVectorizeStore(cfg)
+	log.Println("[VectorStore]: Initialized Cloudflare Vectorize provider.")
 
 	// 5. Initialize Core Repositories
 	authRepo := repository.NewAuthRepository(db)
@@ -114,7 +110,7 @@ func main() {
 	contextUsecase := usecase.NewContextUsecase(roomRepo, messageRepo, memoryRepo, openRouterClient, storageProvider, evalRepo, cryptoService, cfg, artifactUsecase)
 	eventUsecase := usecase.NewEventUsecase(roomRepo, eventRepo)
 	usageUsecase := usecase.NewUsageUsecase(usageRepo)
-	healthUsecase := usecase.NewContextHealthUsecase(healthRepo, roomRepo, openRouterClient)
+	healthUsecase := usecase.NewContextHealthUsecase(healthRepo, roomRepo, openRouterClient, vectorStore)
 
 	messageUsecase := messageUsecaseImpl
 
@@ -148,6 +144,8 @@ func main() {
 	})
 
 	// Public Auth Routes
+	// Register: create a user account and get a JWT.
+	// Login: authenticate an existing user and get a JWT.
 	v1Auth := e.Group("/v1/auth")
 	v1Auth.POST("/register", authHandler.Register)
 	v1Auth.POST("/login", authHandler.Login)
@@ -158,9 +156,17 @@ func main() {
 	v1.Use(handler.UsageTrackingMiddleware(usageUsecase))
 
 	// Auth Me
+	// Me: return the profile of the authenticated user.
 	v1.GET("/auth/me", authHandler.Me)
 
 	// Project & API Key Management
+	// ListProjects: list the caller's projects.
+	// CreateProject: create a new project.
+	// DeleteProject: delete a project by ID.
+	// ListAPIKeys: list API keys for a project.
+	// CreateAPIKey: mint a new API key for a project.
+	// RevokeAPIKey: revoke an API key by ID.
+	// GetPolicy / UpdatePolicy: read / set a project's context-health policy.
 	v1.GET("/projects", projectHandler.ListProjects)
 	v1.POST("/projects", projectHandler.CreateProject)
 	v1.DELETE("/projects/:project_id", projectHandler.DeleteProject)
@@ -171,6 +177,12 @@ func main() {
 	v1.PUT("/projects/:project_id/context-health-policy", healthHandler.UpdatePolicy)
 
 	// Artifacts & Core Memory API
+	// CreateArtifact: store a persistent fact / core-memory artifact.
+	// ListArtifacts: list all artifacts in a project.
+	// GetKnowledgeGraph: get the artifact dependency/relation graph.
+	// GetArtifact: fetch a single artifact by ID.
+	// UpdateArtifact: edit an artifact by ID.
+	// DeleteArtifact: delete an artifact by ID.
 	v1.POST("/projects/:project_id/artifacts", artifactHandler.CreateArtifact)
 	v1.GET("/projects/:project_id/artifacts", artifactHandler.ListArtifacts)
 	v1.GET("/projects/:project_id/artifacts/graph", artifactHandler.GetKnowledgeGraph)
@@ -179,6 +191,16 @@ func main() {
 	v1.DELETE("/projects/:project_id/artifacts/:artifact_id", artifactHandler.DeleteArtifact)
 
 	// Rooms API & Blacklists
+	// CreateRoom: open a new conversation room.
+	// GetRoomState: fetch a room and its current state.
+	// PatchRoomState: partially update room state (e.g. custom fields).
+	// GetChildRooms: list child rooms (multi-agent sub-conversations).
+	// UpdateRoom: update room metadata.
+	// DeleteRoom: delete a room by ID.
+	// WarmupRoom: pre-warm a room's context for faster first reply.
+	// AddRoomBlacklist / GetRoomBlacklists / RemoveRoomBlacklist: manage content blacklists for a room.
+	// ListRoomMemories: list the extracted memories for a room.
+	// CleanRoom: trigger context-health cleanup for a room.
 	v1.POST("/rooms", roomHandler.CreateRoom)
 	v1.GET("/rooms/:room_id", roomHandler.GetRoomState)
 	v1.PATCH("/rooms/:room_id/state", roomHandler.PatchRoomState)
@@ -193,20 +215,35 @@ func main() {
 	v1.POST("/rooms/:room_id/context-health/clean", healthHandler.CleanRoom)
 
 	// Memories Restoration API
+	// RestoreMemory: revive a previously-flagged memory back into a room.
 	v1.POST("/memories/:memory_id/restore", healthHandler.RestoreMemory)
 
 	// Messages API
+	// CreateMessage: append a user/assistant message to a room (the source of truth).
+	// ListMessages: paginate through a room's messages.
 	v1.POST("/rooms/:room_id/messages", messageHandler.CreateMessage)
 	v1.GET("/rooms/:room_id/messages", messageHandler.ListMessages)
 
 	// Context Assembly API
+	// GetContextPackage: build and return the context payload a reply needs.
 	v1.POST("/rooms/:room_id/context", contextHandler.GetContextPackage)
 
 	// Events & SSE Logging API
+	// LogEvent: record a custom event for a room.
+	// StreamEvents: stream room events over SSE.
 	v1.POST("/rooms/:room_id/events", eventHandler.LogEvent)
 	v1.GET("/rooms/:room_id/events", eventHandler.StreamEvents)
 
 	// Dashboard API
+	// GetSummary: aggregate usage/summary stats for the dashboard.
+	// ListRooms: list rooms for the dashboard.
+	// GetRoomDetail: detailed view of one room.
+	// GetArchiveURL: get a signed URL to download a room's archive.
+	// GetProjectLogs: recent project-level log entries.
+	// GetProjectEvaluations: list context-quality evaluations.
+	// GetEvaluationsSummary: aggregate evaluation metrics.
+	// GetEvaluationDetail: full evaluation result by ID.
+	// GetRoomEvaluations: evaluations scoped to one room.
 	v1.GET("/dashboard/summary", dashboardHandler.GetSummary)
 	v1.GET("/dashboard/rooms", dashboardHandler.ListRooms)
 	v1.GET("/dashboard/rooms/:room_id", dashboardHandler.GetRoomDetail)
@@ -218,6 +255,23 @@ func main() {
 	v1.GET("/rooms/:room_id/evaluations", dashboardHandler.GetRoomEvaluations)
 
 	// 9. Bind Listeners & Listen
+	// Background artifact embed retry loop: periodically re-embeds chunks
+	// whose first embedding attempt failed.
+	go func() {
+		ticker := time.NewTicker(90 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			retried, err := artifactUsecase.RetryPendingEmbeds(ctx, 50)
+			cancel()
+			if err != nil {
+				log.Printf("[Artifact Embed Retry]: pass failed: %v", err)
+			} else if retried > 0 {
+				log.Printf("[Artifact Embed Retry]: re-embedded %d pending chunks", retried)
+			}
+		}
+	}()
+
 	serverPort := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("konteks backend listening on port %s...", serverPort)
 	if err := e.Start(serverPort); err != nil {

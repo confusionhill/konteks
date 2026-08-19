@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, type Project } from '../context/AuthContext';
-import { FolderPlus, Search, ArrowRight, Trash2, Calendar, ShieldCheck, Sparkles } from 'lucide-react';
+import { FolderPlus, Search, ArrowRight, Trash2, Calendar, ShieldCheck, Sparkles, Loader2 } from 'lucide-react';
 
 export const Projects: React.FC = () => {
   const { projects, selectProject, createProject, deleteProject, fetchProjects, user, logout } = useAuth();
@@ -23,19 +23,58 @@ export const Projects: React.FC = () => {
     navigate('/dashboard');
   };
 
+  const [provisioningStatus, setProvisioningStatus] = useState<string | null>(null);
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectName.trim()) return;
     setError(null);
     setLoading(true);
+    setProvisioningStatus('Creating project in control plane...');
+    
     try {
-      await createProject(newProjectName.trim(), newProjectDesc.trim());
+      const proj = await createProject(newProjectName.trim(), newProjectDesc.trim());
+      
+      setProvisioningStatus('Provisioning Cloudflare D1 database (this may take up to 30s)...');
+      
+      // Poll for D1 Status
+      let ready = false;
+      let retries = 0;
+      while (!ready && retries < 20) {
+        await new Promise((resolve) => setTimeout(resolve, 3000)); // wait 3s
+        
+        try {
+          const res = await fetch(`/v1/projects/${proj.id}/d1-status`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('konteks_token')}` },
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            if (data.d1_status?.status === 'ready') {
+              ready = true;
+              break;
+            } else if (data.d1_status?.status === 'failed') {
+              throw new Error(`D1 Provisioning failed: ${data.d1_status.error_message}`);
+            }
+          }
+        } catch (pollErr) {
+          console.warn('Poll error', pollErr);
+        }
+        retries++;
+      }
+      
+      if (!ready) {
+        throw new Error('Timeout waiting for database provisioning.');
+      }
+
       setIsModalOpen(false);
       setNewProjectName('');
       setNewProjectDesc('');
+      setProvisioningStatus(null);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to create project');
+      setProvisioningStatus(null);
     } finally {
       setLoading(false);
     }
@@ -215,6 +254,13 @@ export const Projects: React.FC = () => {
               </div>
             )}
 
+            {provisioningStatus && (
+              <div className="mb-4 text-xs bg-indigo-50 border border-indigo-200 text-indigo-700 p-3 rounded-lg flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <span>{provisioningStatus}</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateProject} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -247,7 +293,8 @@ export const Projects: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50"
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>

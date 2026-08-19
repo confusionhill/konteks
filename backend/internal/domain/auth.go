@@ -56,6 +56,19 @@ type APIKey struct {
 	RevokedAt  *time.Time `db:"revoked_at" json:"revoked_at,omitempty"`
 }
 
+type D1InfrastructureJob struct {
+	ID             string    `db:"id" json:"id"`
+	ProjectID      string    `db:"project_id" json:"project_id"`
+	D1DatabaseUUID *string   `db:"d1_database_uuid" json:"d1_database_uuid,omitempty"`
+	D1Name         string    `db:"d1_name" json:"d1_name"`
+	Jurisdiction   string    `db:"jurisdiction" json:"jurisdiction"`
+	Status         string    `db:"status" json:"status"`
+	ErrorMessage   *string   `db:"error_message" json:"error_message,omitempty"`
+	RetryCount     int       `db:"retry_count" json:"retry_count"`
+	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at" json:"updated_at"`
+}
+
 // AuthContext carries the authentication scope resolved from an API key.
 // It is resolved at the MCP transport boundary and threaded through the
 // service and repository layers so that every query is scoped to one project.
@@ -82,6 +95,12 @@ type AuthRepository interface {
 	ListProjectsByOwnerID(ctx context.Context, ownerID string) ([]Project, error)
 	SoftDeleteProject(ctx context.Context, id, ownerID string) error
 	IsUserProjectMemberOrOwner(ctx context.Context, projectID, userID string) (bool, error)
+
+	// D1 Provisioning Async Queue
+	CreatePendingD1Infrastructure(ctx context.Context, projectID, dbName string) error
+	GetPendingD1Jobs(ctx context.Context) ([]D1InfrastructureJob, error)
+	UpdateD1InfrastructureStatus(ctx context.Context, projectID string, uuid *string, status string, errorMsg *string, retries int) error
+	GetD1Status(ctx context.Context, projectID string) (*D1InfrastructureJob, error)
 
 	// APIKey operations
 	CreateAPIKey(ctx context.Context, projectID, name, keyHash, keyPrefix string, expiresAt *time.Time) (*APIKey, error)

@@ -221,17 +221,61 @@ func classifyStrategy(query string) string {
 }
 
 func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string, roomID string, req domain.GetContextRequest) (*domain.ContextPackage, error) {
-	room, err := u.roomRepo.GetByID(ctx, projectID, roomID)
-	if err != nil {
-		return nil, err
+
+	// [OPTIMIZATION]: Start embedding generation immediately to hide latency
+	var queryEmbedding []float32
+	var embeddingErr error
+	var embeddingDone = make(chan struct{})
+
+	if !req.Policy.FastMode && req.Query != "" {
+		go func() {
+			defer close(embeddingDone)
+			queryToEmbed := req.Query
+			if len(queryToEmbed) > 1000 {
+				queryToEmbed = queryToEmbed[:1000]
+			}
+			embedCtx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+			defer cancel()
+			emb, errEmb := u.openRouterClient.GenerateEmbedding(embedCtx, queryToEmbed)
+			embeddingErr = errEmb
+			queryEmbedding = emb
+		}()
+	} else {
+		close(embeddingDone)
 	}
-	if room == nil {
+
+	// Parallel DB fetch: GetState and GetMaxSequence have no dependency on each other
+	var state *domain.RoomState
+	var maxSeq int64
+	{
+		var dbGroup errgroup.Group
+		dbGroup.Go(func() error {
+			s, errState := u.roomRepo.GetState(ctx, roomID)
+			if errState != nil {
+				return errState
+			}
+			state = s
+			return nil
+		})
+		dbGroup.Go(func() error {
+			seq, errSeq := u.messageRepo.GetMaxSequence(ctx, roomID)
+			if errSeq != nil {
+				seq = 0
+			}
+			maxSeq = seq
+			return nil
+		})
+		if err := dbGroup.Wait(); err != nil {
+			return nil, err
+		}
+	}
+	if state == nil {
 		return nil, fmt.Errorf("room not found or unauthorized")
 	}
 
-	if room.Status == domain.RoomStatusArchived {
+	if state.Status == domain.RoomStatusArchived {
 		log.Printf("[Context Engine]: Room %s is archived. Triggering Background Hydration...", roomID)
-		err = u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
+		err := u.roomRepo.UpdateStatus(ctx, roomID, domain.RoomStatusHydrating)
 		if err != nil {
 			return nil, fmt.Errorf("failed to lock room status to hydrating: %w", err)
 		}
@@ -239,8 +283,9 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		go func() {
 			bgCtx := context.Background()
 
-			if room.ArchiveS3Path == nil || *room.ArchiveS3Path == "" {
-				log.Printf("[Context Engine Background Error]: room is archived but archive S3 path is empty for room %s", roomID)
+			room, getErr := u.roomRepo.GetByID(bgCtx, projectID, roomID)
+			if getErr != nil || room == nil || room.ArchiveS3Path == nil || *room.ArchiveS3Path == "" {
+				log.Printf("[Context Engine Background Error]: room is archived but archive S3 path is missing or room fetch failed for room %s", roomID)
 				_ = u.roomRepo.UpdateStatus(bgCtx, roomID, domain.RoomStatusArchived)
 				return
 			}
@@ -284,30 +329,30 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		}()
 
 		// We do not block here. We continue processing the request using the hot cache from DB.
-		room.Status = domain.RoomStatusActive
+		state.Status = domain.RoomStatusActive
 	}
 
-	if room.Status == domain.RoomStatusHydrating {
+	if state.Status == domain.RoomStatusHydrating {
 		log.Printf("[Context Engine]: Room %s is currently hydrating. Serving from hot cache...", roomID)
 		// We do not block here. We continue processing the request using the hot cache from DB.
 	}
 
 	policy := req.Policy
-	if room.DefaultPolicy != nil {
+	if state.DefaultPolicy != nil {
 		if policy.MaxTokens <= 0 {
-			policy.MaxTokens = room.DefaultPolicy.MaxTokens
+			policy.MaxTokens = state.DefaultPolicy.MaxTokens
 		}
 		if policy.MaxHistoryDepth <= 0 {
-			policy.MaxHistoryDepth = room.DefaultPolicy.MaxHistoryDepth
+			policy.MaxHistoryDepth = state.DefaultPolicy.MaxHistoryDepth
 		}
 		if policy.FreshnessWeight <= 0 {
-			policy.FreshnessWeight = room.DefaultPolicy.FreshnessWeight
+			policy.FreshnessWeight = state.DefaultPolicy.FreshnessWeight
 		}
 		if policy.Strategy == "" {
-			policy.Strategy = room.DefaultPolicy.Strategy
+			policy.Strategy = state.DefaultPolicy.Strategy
 		}
 		if policy.MinRelevanceScore <= 0 {
-			policy.MinRelevanceScore = room.DefaultPolicy.MinRelevanceScore
+			policy.MinRelevanceScore = state.DefaultPolicy.MinRelevanceScore
 		}
 	}
 
@@ -344,39 +389,33 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		msgLimit = policy.MaxHistoryDepth
 	}
 
-	// Parallel DB fetch: GetState and GetMaxSequence have no dependency on each other
-	var state *domain.RoomState
-	var maxSeq int64
-	{
-		var dbGroup errgroup.Group
-		dbGroup.Go(func() error {
-			s, errState := u.roomRepo.GetState(ctx, roomID)
-			if errState != nil {
-				return errState
+	// [OPTIMIZATION]: Kick off memory search asynchronously now that we have `state.ExternalUserID`
+	// Wait for the early embedding generation to finish, then trigger search semantic.
+	var matchedMemories []domain.Memory
+	var memSearchDone = make(chan struct{})
+	if !policy.FastMode && req.Query != "" {
+		go func() {
+			defer close(memSearchDone)
+			<-embeddingDone
+			if embeddingErr != nil {
+				log.Printf("[Context Query Embedding Error / Timeout]: %v", embeddingErr)
+			} else if queryEmbedding != nil {
+				var extUserID *string
+				if state.ExternalUserID != "" {
+					extUserID = &state.ExternalUserID
+				}
+				memSearch, errSearch := u.memoryRepo.SearchSemantic(context.Background(), projectID, roomID, extUserID, queryEmbedding, policy.FreshnessWeight, memLimit)
+				if errSearch != nil {
+					log.Printf("[Context Memory Search Error]: %v", errSearch)
+				} else {
+					matchedMemories = memSearch
+				}
 			}
-			state = s
-			return nil
-		})
-		dbGroup.Go(func() error {
-			seq, errSeq := u.messageRepo.GetMaxSequence(ctx, roomID)
-			if errSeq != nil {
-				seq = 0
-			}
-			maxSeq = seq
-			return nil
-		})
-		if err := dbGroup.Wait(); err != nil {
-			return nil, err
-		}
+		}()
+	} else {
+		close(memSearchDone)
 	}
-	if state == nil {
-		state = &domain.RoomState{
-			RoomID:      roomID,
-			Summary:     "",
-			ActiveTopic: "",
-			State:       json.RawMessage("{}"),
-		}
-	}
+
 
 	pendingCount := maxSeq - state.LastSummarizedSeq
 	finalMsgLimit := msgLimit
@@ -412,7 +451,6 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 		}
 	}
 
-	var matchedMemories []domain.Memory
 	references := make(map[string]string)
 	entities := []domain.Entity{}
 
@@ -439,36 +477,8 @@ func (u *contextUsecase) GetContextPackage(ctx context.Context, projectID string
 			})
 		}
 
-		if req.Query != "" {
-			g.Go(func() error {
-				queryToEmbed := req.Query
-				if len(queryToEmbed) > 1000 {
-					queryToEmbed = queryToEmbed[:1000]
-				}
-
-				embedCtx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
-				defer cancel()
-
-				embedding, errEmbedding := u.openRouterClient.GenerateEmbedding(embedCtx, queryToEmbed)
-				if errEmbedding != nil {
-					log.Printf("[Context Query Embedding Error / Timeout]: %v", errEmbedding)
-				} else {
-					var extUserID *string
-					if room.ExternalUserID != "" {
-						extUserID = &room.ExternalUserID
-					}
-					memSearch, errSearch := u.memoryRepo.SearchSemantic(ctx, projectID, roomID, extUserID, embedding, policy.FreshnessWeight, memLimit)
-					if errSearch != nil {
-						log.Printf("[Context Memory Search Error]: %v", errSearch)
-					} else {
-						matchedMemories = memSearch
-					}
-				}
-				return nil
-			})
-		}
-
 		_ = g.Wait()
+		<-memSearchDone // wait for the early memory search to finish
 
 		if extractSuccess {
 			state.Summary = newSummary

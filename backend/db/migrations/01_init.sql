@@ -1,6 +1,3 @@
--- Enable vector extension
-CREATE EXTENSION IF NOT EXISTS vector;
-
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -12,12 +9,21 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
--- Projects table (scraped tenants -> projects with safe soft-delete)
+-- Projects table
 CREATE TABLE IF NOT EXISTS projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     description TEXT DEFAULT '' NOT NULL,
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    context_health_policy JSONB DEFAULT '{
+      "enabled": true,
+      "mode": "balanced",
+      "decay_half_life_days": 30,
+      "max_entropy_threshold": 4.8,
+      "turn_eval_interval": 50,
+      "deduplication_threshold": 0.95,
+      "e2ee_eval_location": "server_distance_only"
+    }'::jsonb NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -25,7 +31,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE INDEX IF NOT EXISTS idx_projects_owner_id ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_projects_owner_deleted ON projects(owner_id, deleted_at);
 
--- Project Members table (future-proofing project user invitations & permissions)
+-- Project Members table
 CREATE TABLE IF NOT EXISTS project_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -37,7 +43,7 @@ CREATE TABLE IF NOT EXISTS project_members (
 CREATE INDEX IF NOT EXISTS idx_project_members_project_id ON project_members(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_user_id ON project_members(user_id);
 
--- Project Invitations table (future-proofing pending user invitations)
+-- Project Invitations table
 CREATE TABLE IF NOT EXISTS project_invitations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -52,7 +58,7 @@ CREATE TABLE IF NOT EXISTS project_invitations (
 CREATE INDEX IF NOT EXISTS idx_project_invitations_token ON project_invitations(token);
 CREATE INDEX IF NOT EXISTS idx_project_invitations_project_email ON project_invitations(project_id, email);
 
--- API Keys table (bound per project)
+-- API Keys table
 CREATE TABLE IF NOT EXISTS api_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -67,7 +73,22 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_project_id ON api_keys(project_id);
 
--- Rooms table (bound to project)
+-- Project D1 Infrastructure Registry
+CREATE TABLE IF NOT EXISTS project_d1_infrastructure (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    d1_database_uuid UUID,
+    d1_name VARCHAR(255) NOT NULL,
+    jurisdiction VARCHAR(8) NOT NULL DEFAULT 'us',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    error_message TEXT,
+    retry_count INT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE (project_id)
+);
+
+-- Rooms table
 CREATE TABLE IF NOT EXISTS rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -76,10 +97,15 @@ CREATE TABLE IF NOT EXISTS rooms (
     default_policy JSONB,
     status VARCHAR(20) DEFAULT 'active' NOT NULL CHECK (status IN ('active', 'archived', 'archiving', 'hydrating')),
     archive_s3_path TEXT,
+    description TEXT DEFAULT '' NOT NULL,
+    parent_room_id UUID REFERENCES rooms(id) ON DELETE SET NULL,
+    message_count INT DEFAULT 0 NOT NULL,
+    last_message_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_rooms_project_id ON rooms(project_id);
+CREATE INDEX IF NOT EXISTS idx_rooms_parent_room_id ON rooms(parent_room_id);
 
 -- Messages table
 CREATE TABLE IF NOT EXISTS messages (
@@ -91,6 +117,8 @@ CREATE TABLE IF NOT EXISTS messages (
     tokens_input INT DEFAULT NULL,
     tokens_output INT DEFAULT NULL,
     cost_total NUMERIC(12, 6) DEFAULT NULL,
+    is_encrypted BOOLEAN DEFAULT FALSE,
+    encryption_metadata JSONB DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_room_sequence ON messages(room_id, sequence);
@@ -104,6 +132,8 @@ CREATE TABLE IF NOT EXISTS room_state (
     "references" JSONB DEFAULT '{}'::jsonb,
     "entities" JSONB DEFAULT '[]'::jsonb,
     last_summarized_seq BIGINT DEFAULT 0 NOT NULL,
+    is_encrypted BOOLEAN DEFAULT FALSE,
+    encryption_metadata JSONB DEFAULT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
@@ -114,12 +144,33 @@ CREATE TABLE IF NOT EXISTS memories (
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     external_user_id VARCHAR(255),
     content TEXT NOT NULL,
-    embedding vector(1536) NOT NULL,
     metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+    status VARCHAR(20) DEFAULT 'active' NOT NULL,
+    superseded_by_id UUID REFERENCES memories(id) ON DELETE SET NULL,
+    shannon_entropy DOUBLE PRECISION DEFAULT 0.0 NOT NULL,
+    is_whitelisted BOOLEAN DEFAULT false NOT NULL,
+    is_encrypted BOOLEAN DEFAULT FALSE,
+    encryption_metadata JSONB DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_memories_room_id ON memories(room_id);
 CREATE INDEX IF NOT EXISTS idx_memories_project_user ON memories(project_id, external_user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_room_status ON memories(room_id, status);
+CREATE INDEX IF NOT EXISTS idx_memories_superseded_by ON memories(superseded_by_id);
+
+-- Memory Revisions table
+CREATE TABLE IF NOT EXISTS memory_revisions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    action VARCHAR(50) NOT NULL, -- 'superseded', 'restored', 'syntax_flagged'
+    previous_state JSONB NOT NULL DEFAULT '{}'::jsonb,
+    new_state JSONB NOT NULL DEFAULT '{}'::jsonb,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_revisions_room ON memory_revisions(room_id);
+CREATE INDEX IF NOT EXISTS idx_memory_revisions_memory ON memory_revisions(memory_id);
 
 -- Room Events table
 CREATE TABLE IF NOT EXISTS room_events (
@@ -159,13 +210,80 @@ CREATE TABLE IF NOT EXISTS context_evaluations (
     token_efficiency_score DOUBLE PRECISION NOT NULL,
     reasoning TEXT NOT NULL,
     is_new_topic BOOLEAN NOT NULL DEFAULT FALSE,
+    is_encrypted BOOLEAN DEFAULT FALSE,
+    encryption_metadata JSONB DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_context_evaluations_room_id ON context_evaluations(room_id);
 CREATE INDEX IF NOT EXISTS idx_context_evaluations_project_id ON context_evaluations(project_id);
 
+-- Artifact Groups table
+CREATE TABLE IF NOT EXISTS artifact_groups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    folder_path VARCHAR(512) DEFAULT '/' NOT NULL,
+    description TEXT DEFAULT '' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE (project_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_artifact_groups_project ON artifact_groups(project_id);
+
+-- Artifacts table
+CREATE TABLE IF NOT EXISTS artifacts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    group_id UUID REFERENCES artifact_groups(id) ON DELETE SET NULL,
+    file_path VARCHAR(512) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    s3_key VARCHAR(1024) DEFAULT '' NOT NULL,
+    content_hash VARCHAR(64) NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE (project_id, file_path)
+);
+CREATE INDEX IF NOT EXISTS idx_artifacts_project_path ON artifacts(project_id, file_path);
+CREATE INDEX IF NOT EXISTS idx_artifacts_group_id ON artifacts(group_id);
+
+-- Artifact Chunks table
+CREATE TABLE IF NOT EXISTS artifact_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    artifact_id UUID NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    chunk_index INT NOT NULL,
+    section_heading VARCHAR(255) DEFAULT '' NOT NULL,
+    content TEXT NOT NULL,
+    vector_status VARCHAR(16) NOT NULL DEFAULT 'indexed',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_artifact_chunks_artifact ON artifact_chunks(artifact_id);
+CREATE INDEX IF NOT EXISTS idx_artifact_chunks_project ON artifact_chunks(project_id);
+CREATE INDEX IF NOT EXISTS idx_artifact_chunks_vector_status ON artifact_chunks(vector_status);
+
+-- Artifact References table
+CREATE TABLE IF NOT EXISTS artifact_references (
+    source_artifact_id UUID NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+    target_artifact_id UUID NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+    relationship_type VARCHAR(50) DEFAULT 'refers_to' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (source_artifact_id, target_artifact_id)
+);
+CREATE INDEX IF NOT EXISTS idx_artifact_references_target ON artifact_references(target_artifact_id);
+
+-- Room Artifact Blacklists table
+CREATE TABLE IF NOT EXISTS room_artifact_blacklists (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    artifact_id UUID REFERENCES artifacts(id) ON DELETE CASCADE,
+    group_name VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT check_blacklist_target CHECK (artifact_id IS NOT NULL OR group_name IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_room_blacklists_room ON room_artifact_blacklists(room_id);
+
 -- Seed Initial Test Admin User (email: admin@admin.com | password: admin123)
--- Bcrypt hash for "admin123": $2a$10$DIk22SIkufr3xFaumPQtHu5diNVade5xIvsvMY5vmsRCeKKSFJ/Ja
 INSERT INTO users (id, email, password_hash, name)
 VALUES (
     'a0000000-0000-0000-0000-000000000001',
@@ -192,7 +310,6 @@ VALUES (
 ) ON CONFLICT (project_id, user_id) DO NOTHING;
 
 -- Seed Initial API Key for Demo Project (raw key: ck_live_dev_test_key_123)
--- SHA-256 hash for "ck_live_dev_test_key_123": 6f7eea6cec35b392990580b1c2abb43ea829c056f1495c0202b3b57ed2b2f3a9
 INSERT INTO api_keys (id, project_id, key_hash, key_prefix, name)
 VALUES (
     'c0000000-0000-0000-0000-000000000001',

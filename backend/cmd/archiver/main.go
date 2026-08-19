@@ -45,9 +45,11 @@ func main() {
 		log.Fatalf("failed to initialize S3 storage provider: %v", err)
 	}
 
-	// 4. Initialize Core Repositories
-	roomRepo := repository.NewRoomRepository(db)
-	messageRepo := repository.NewMessageRepository(db)
+	d1Store := repository.NewCloudflareD1Store(cfg)
+	d1Router := service.NewD1Router(db)
+
+	roomRepo := repository.NewRoomRepository(db, d1Store, d1Router)
+	messageRepo := repository.NewMessageRepository(db, d1Store, d1Router)
 	memoryRepo := repository.NewMemoryRepository(db, vectorStore)
 
 	// 5. Run Archival Sweep

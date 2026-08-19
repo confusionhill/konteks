@@ -13,6 +13,7 @@ import (
 	"github.com/dika/contextkit/backend/internal/repository"
 	"github.com/dika/contextkit/backend/internal/service"
 	"github.com/dika/contextkit/backend/internal/usecase"
+	"github.com/dika/contextkit/backend/internal/worker"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -59,14 +60,6 @@ func main() {
 	// 3. Programmatically Apply Consolidated Database Schema & Seed Data
 	migrationFiles := []string{
 		"db/migrations/01_init.sql",
-		"db/migrations/02_add_encryption_fields.sql",
-		"db/migrations/03_add_evaluation_encryption_fields.sql",
-		"db/migrations/04_add_room_description_and_parent.sql",
-		"db/migrations/05_add_artifacts.sql",
-		"db/migrations/07_add_context_health_settings.sql",
-		"db/migrations/08_optional_embedding.sql",
-		"db/migrations/09_drop_vector_columns.sql",
-		"db/migrations/10_artifact_chunk_vector_status.sql",
 	}
 	for _, migrationFile := range migrationFiles {
 		log.Printf("applying database migrations from %s...", migrationFile)
@@ -84,8 +77,12 @@ func main() {
 
 	// 5. Initialize Core Repositories
 	authRepo := repository.NewAuthRepository(db)
-	roomRepo := repository.NewRoomRepository(db)
-	messageRepo := repository.NewMessageRepository(db)
+	
+	d1Store := repository.NewCloudflareD1Store(cfg)
+	d1Router := service.NewD1Router(db)
+
+	roomRepo := repository.NewRoomRepository(db, d1Store, d1Router)
+	messageRepo := repository.NewMessageRepository(db, d1Store, d1Router)
 	memoryRepo := repository.NewMemoryRepository(db, vectorStore)
 	eventRepo := repository.NewEventRepository(db)
 	usageRepo := repository.NewUsageRepository(db)
@@ -119,7 +116,7 @@ func main() {
 	authMiddleware := handler.AuthMiddleware(authRepo, cfg.JWTSecret)
 
 	authHandler := handler.NewAuthHandler(authRepo, cfg.JWTSecret)
-	projectHandler := handler.NewProjectHandler(authRepo, cfg.JWTSecret)
+	projectHandler := handler.NewProjectHandler(authRepo, d1Store, cfg.JWTSecret)
 	roomHandler := handler.NewRoomHandler(roomUsecase)
 	messageHandler := handler.NewMessageHandler(messageUsecase)
 	artifactHandler := handler.NewArtifactHandler(artifactUsecase)
@@ -170,6 +167,7 @@ func main() {
 	v1.GET("/projects", projectHandler.ListProjects)
 	v1.POST("/projects", projectHandler.CreateProject)
 	v1.DELETE("/projects/:project_id", projectHandler.DeleteProject)
+	v1.GET("/projects/:project_id/d1-status", projectHandler.GetProjectD1Status)
 	v1.GET("/projects/:project_id/api-keys", projectHandler.ListAPIKeys)
 	v1.POST("/projects/:project_id/api-keys", projectHandler.CreateAPIKey)
 	v1.DELETE("/projects/:project_id/api-keys/:key_id", projectHandler.RevokeAPIKey)
@@ -254,7 +252,11 @@ func main() {
 	v1.GET("/evaluations/:eval_id", dashboardHandler.GetEvaluationDetail)
 	v1.GET("/rooms/:room_id/evaluations", dashboardHandler.GetRoomEvaluations)
 
-	// 9. Bind Listeners & Listen
+	// 9. Start Background Workers
+	d1ProvisionerWorker := worker.NewD1Provisioner(authRepo, d1Store)
+	go d1ProvisionerWorker.Start(context.Background())
+
+	// 10. Bind Listeners & Listen
 	// Background artifact embed retry loop: periodically re-embeds chunks
 	// whose first embedding attempt failed.
 	go func() {

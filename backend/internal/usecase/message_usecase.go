@@ -118,6 +118,11 @@ func (u *messageUsecase) processBackgroundUpdate(task messageTask) {
 		}
 	}
 
+	// Async Postgres Update for Pagination
+	if err := u.roomRepo.UpdateMessageMetrics(ctx, task.RoomID); err != nil {
+		log.Printf("[Background Worker Metric Error]: failed to update room metrics: %v", err)
+	}
+
 	if room.DefaultPolicy != nil && room.DefaultPolicy.AutoExtractState != nil && !*room.DefaultPolicy.AutoExtractState {
 		log.Printf("[Background Worker]: AutoExtractState is disabled for room %s. Skipping LLM state extraction.", task.RoomID)
 		return

@@ -105,6 +105,54 @@ func (r *authRepository) CreateProject(ctx context.Context, name, description, o
 	return &proj, nil
 }
 
+func (r *authRepository) CreatePendingD1Infrastructure(ctx context.Context, projectID, dbName string) error {
+	query := `
+		INSERT INTO project_d1_infrastructure (project_id, d1_name, status, created_at, updated_at)
+		VALUES ($1, $2, 'pending', NOW(), NOW())
+	`
+	_, err := r.db.ExecContext(ctx, query, projectID, dbName)
+	return err
+}
+
+func (r *authRepository) GetPendingD1Jobs(ctx context.Context) ([]domain.D1InfrastructureJob, error) {
+	query := `
+		SELECT id, project_id, d1_database_uuid, d1_name, jurisdiction, status, error_message, retry_count, created_at, updated_at
+		FROM project_d1_infrastructure
+		WHERE status = 'pending'
+		ORDER BY created_at ASC
+	`
+	var jobs []domain.D1InfrastructureJob
+	err := r.db.SelectContext(ctx, &jobs, query)
+	return jobs, err
+}
+
+func (r *authRepository) UpdateD1InfrastructureStatus(ctx context.Context, projectID string, uuid *string, status string, errorMsg *string, retries int) error {
+	query := `
+		UPDATE project_d1_infrastructure
+		SET d1_database_uuid = $1, status = $2, error_message = $3, retry_count = $4, updated_at = NOW()
+		WHERE project_id = $5
+	`
+	_, err := r.db.ExecContext(ctx, query, uuid, status, errorMsg, retries, projectID)
+	return err
+}
+
+func (r *authRepository) GetD1Status(ctx context.Context, projectID string) (*domain.D1InfrastructureJob, error) {
+	query := `
+		SELECT id, project_id, d1_database_uuid, d1_name, jurisdiction, status, error_message, retry_count, created_at, updated_at
+		FROM project_d1_infrastructure
+		WHERE project_id = $1
+	`
+	var job domain.D1InfrastructureJob
+	err := r.db.GetContext(ctx, &job, query, projectID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &job, nil
+}
+
 // GetProjectByID retrieves a non-deleted project by ID
 func (r *authRepository) GetProjectByID(ctx context.Context, id string) (*domain.Project, error) {
 	query := `

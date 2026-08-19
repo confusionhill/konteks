@@ -25,10 +25,16 @@ type Room struct {
 	DefaultPolicy  *ContextPolicy  `db:"default_policy" json:"default_policy,omitempty"`
 	Status         string          `db:"status" json:"status"`
 	ArchiveS3Path  *string         `db:"archive_s3_path" json:"archive_s3_path,omitempty"`
+	MessageCount   int             `db:"message_count" json:"message_count"`
+	LastMessageAt  *string         `db:"last_message_at" json:"last_message_at,omitempty"`
 }
 
 type RoomState struct {
 	RoomID            string            `db:"room_id" json:"room_id"`
+	Status            string            `json:"status"`
+	ExternalUserID    string            `json:"external_user_id"`
+	DefaultPolicy     *ContextPolicy    `json:"default_policy"`
+	ArchiveS3Path     *string           `json:"archive_s3_path,omitempty"`
 	Summary           string            `db:"summary" json:"summary"`
 	ActiveTopic       string            `db:"active_topic" json:"active_topic"`
 	State             json.RawMessage   `db:"state" json:"state"`
@@ -60,6 +66,7 @@ type RoomRepository interface {
 	UpdateStatus(ctx context.Context, roomID string, status string) error
 	ArchiveRoomTx(ctx context.Context, roomID string, archiveS3Path string) error
 	HydrateRoomTx(ctx context.Context, roomID string, state *RoomState, messages []Message, memories []Memory) error
+	UpdateMessageMetrics(ctx context.Context, roomID string) error
 }
 
 type RoomOverview struct {

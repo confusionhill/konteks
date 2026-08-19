@@ -15,12 +15,14 @@ import (
 
 type ProjectHandler struct {
 	authRepo  domain.AuthRepository
+	d1Store   domain.D1Store
 	jwtSecret string
 }
 
-func NewProjectHandler(authRepo domain.AuthRepository, jwtSecret string) *ProjectHandler {
+func NewProjectHandler(authRepo domain.AuthRepository, d1Store domain.D1Store, jwtSecret string) *ProjectHandler {
 	return &ProjectHandler{
 		authRepo:  authRepo,
+		d1Store:   d1Store,
 		jwtSecret: jwtSecret,
 	}
 }
@@ -74,6 +76,17 @@ func (h *ProjectHandler) CreateProject(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create project"})
 	}
 
+	// Dynamic Provisioning of Cloudflare D1 Database (Asynchronous Queue)
+	dbName := fmt.Sprintf("ck_proj_%s", strings.ReplaceAll(project.ID, "-", ""))
+	if len(dbName) > 32 {
+		dbName = dbName[:32]
+	}
+
+	err = h.authRepo.CreatePendingD1Infrastructure(c.Request().Context(), project.ID, dbName)
+	if err != nil {
+		fmt.Printf("[Project Handler Error]: failed to enqueue D1 provisioning for project %s: %v\n", project.ID, err)
+	}
+
 	// Generate updated JWT token for user containing the new project ID
 	user, _ := h.authRepo.GetUserByID(c.Request().Context(), userID)
 	allProjects, _ := h.authRepo.ListProjectsByOwnerID(c.Request().Context(), userID)
@@ -107,6 +120,31 @@ func (h *ProjectHandler) DeleteProject(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// GetProjectD1Status returns the provisioning status of the Cloudflare D1 database for a project
+func (h *ProjectHandler) GetProjectD1Status(c echo.Context) error {
+	userID, _ := c.Get("user_id").(string)
+	projectID := c.Param("project_id")
+
+	// Check user membership / ownership
+	isAuth, err := h.authRepo.IsUserProjectMemberOrOwner(c.Request().Context(), projectID, userID)
+	if err != nil || !isAuth {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "access denied for this project"})
+	}
+
+	status, err := h.authRepo.GetD1Status(c.Request().Context(), projectID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to retrieve d1 status"})
+	}
+
+	if status == nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "infrastructure record not found"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"d1_status": status,
+	})
 }
 
 // ListAPIKeys lists API keys for a given project
